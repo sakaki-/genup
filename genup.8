@@ -1,0 +1,179 @@
+.TH GENUP 8 "Version 1.0.0: July 2014"
+.SH NAME
+genup \- update Portage tree, all installed packages, and kernel
+.SH SYNOPSIS
+.B genup
+[\fIoptions\fR]
+.SH DESCRIPTION
+.B genup
+is a utility intended to simplify the process of keeping your Gentoo system
+up to date. 
+When invoked, it automatically performs the following steps, in order:
+.br
+.RS
+.IP \(bu 2
+updates Portage tree (and active overlays), and syncs \fBeix\fR(1)
+.br
+(using \fBeix-sync\fR)
+.IP \(bu 2
+removes any prior \fBemerge\fR(1) resume history;
+.br
+(using \fBemaint --fix cleanresume\fR)
+.IP \(bu 2
+ensures Portage itself is up-to-date
+.br
+(using \fBemerge --oneshot --update portage\fR)
+.IP \(bu 2
+updates all packages in the @world set
+.br
+(using \fBemerge --deep --with-bdeps=y --newuse --update @world\fR)
+.IP \(bu 2
+rebuilds any packages depending on stale libraries
+.br
+(using \fBemerge @preserved-rebuild\fR)
+.IP \(bu 2
+updates any old \fBperl\fR(1) modules
+.br
+(using \fBperl-cleaner --all\fR)
+.IP \(bu 2
+updates any old \fBpython\fR(1) modules
+.br
+(using \fBpython-updater\fR)
+.IP \(bu 2
+resolves clashing config file changes (in interactive mode)
+.br
+(using \fBdispatch-conf\fR)
+.IP \(bu 2
+upgrades the kernel if possible (to staging, in \fI/boot\fR)
+.br
+(using \fBbuildkernel --stage-only\fR)
+.IP \(bu 2
+removes unreferenced packages
+.br
+(using \fBemerge --depclean\fR)
+.IP \(bu 2
+fixes missing shared library dependencies
+.br
+(using \fBrevdep-rebuild\fR)
+.IP \(bu 2
+deploys new kernel from staging (if desired and available)
+.br
+(using \fBbuildkernel --copy-from-staging\fR)
+.IP \(bu 2
+updates environment settings (as a precautionary measure)
+.br
+(using \fBenv-update\fR)
+.PP
+.RE
+The \fBgenup\fR utility can be invoked in non-interative (default) or 
+interactive mode (see the \fB--ask\fR option, below).
+Non-interactive mode is suitable for use in a scripted invocation, for example
+as part of a nightly \fBcron\fR(8) job.
+.SH OPTIONS
+.TP
+.BR \-a ", " \-\-ask
+By default, \fBgenup\fR will:
+a) attempt to perform the update automatically;
+b) attempt to rebuild the kernel (if a new version becomes available);
+c) fail immediately on any error; 
+d) invoke underlying tools (such as \fBbuildkernel\fR(1)) in non-interactive
+mode; and
+e) not invoke \fBdispatch-conf\fR(1) to resolve clashing configuration file
+updates (unless the \fB--dispatch-conf\fR option has been specified)
+
+However, if you supply the \fB--ask\fR option, then \fBgenup\fR will instead:
+a) prompt for confirmation during important steps of the update;
+b) ask whether or not you wish to rebuild the kernel
+(if a new version becomes available)
+c) fail immediately on any error, \fBexcept\fR when that error occurs during the
+@world update \fBemerge\fR(1) (in which case, prompt whether or not to retry,
+allowing the problem \(em for example, a missing use flag \(em to be fixed in
+a separate terminal);
+d) invoke underlying tools (such as \fBbuildkernel\fR(1)) in interactive mode; and
+e) invoke \fBdispatch-conf\rR(1) to resolve clashing configuration file updates.
+
+In both interactive and non-interactive modes, \fBgenup\fR can be instructed
+to skip the kernel rebuild check, using the \fB--no-kernel-upgrade\fR option
+(see below).
+.TP
+.BR \-b ", " \-\-buildkernel\-args\=ADDITIONAL_ARGS
+Passes the specified arguments to the main
+.BR buildkernel (8)
+invocation (the one used to create a new kernel in the \fI/boot\fR staging
+area). These arguments are \fInot\fR passed to the second invocation, where used
+(which copies the built kernel to from the staging area to the system
+partition).
+.TP
+.BR \-c ", " \-\-dispatch\-conf
+Always forces \fBdispatch-conf\rR(1) to be run, where necessary, even if
+not in interactive mode.
+.TP
+.BR \-d ", " \-\-deploy\-from\-staging
+When a new kernel is available (and, if in interactive mode, you so request)
+\fBgenup\fR will build that new kernel to the staging area in \fI/boot\fR 
+(using \fBbuildkernel\fR(8) with the \fB--stage-only\fR option).
+This ensures that the build can proceed without needing your boot USB key
+(if used) to be inserted, so it can be completed in an unattended context.
+When the \fB--deploy-from-staging\fR option is specified, \fBgenkernel\fR will
+also attempt to deploy the new kernel (if any) at the end of the process
+to your EFI system partition (NB, in
+interactive mode, you will be asked whether you wish to do this anyway).
+
+If you create a new kernel as the result of a \fBgenup\fR run, but do \fInot\fR
+choose to deploy it at the time, you can always do so later by issuing:
+\fBbuildkernel --ask --copy-from-staging\fR.
+.TP
+.BR \-e ", " \-\-emerge\-args\=ADDITIONAL_ARGS
+Passes the specified arguments to the main
+.BR emerge (1)
+invocation. One possible use here is to specify:
+.br
+\fB--emerge-args="--autounmask-write"\fR
+
+This instructs \fBemerge\fR(1) to automatically make any necessary changes to 
+Portage configuration files to ensure that the process can proceed (adding
+additional use flags, allowing libraries, and so on), provided the Portage
+\fB--autounmask\fR option is enabled (which by default it is).
+This can be useful when
+running \fBgenup\fR in an unattended situation (assuming of course you are
+comfortable with such changes being made automatically on your behalf).
+.TP
+.BR \-h ", " \-\-help
+Displays a short help screen, and exits.
+.TP
+.BR \-n ", " \-\-no\-kernel\-upgrade
+Do not perform (in non-interactive mode) or offer to perform (in interactive
+mode) a kernel recompile, even should a newer version be available. 
+
+Note, this does \fBnot\fR itself prevent the update of \fBgentoo-sources\fR (or similar
+package), during the @world \fBemerge\fR(1) step.
+.TP
+.BR \-v ", " \-\-verbose
+Provides more verbose output from invoked tools, where possible.
+.TP
+.BR \-V ", " \-\-version
+Displays the version number of \fBgenup\fR, and exits.
+.SH EXIT STATUS
+The exit status is 0 if the update completed successfully, and 1 otherwise.
+.SH COPYRIGHT
+.nf
+Copyright \(co 2014 sakaki
+License GPLv3+ (GNU GPL version 3 or later)
+<http://gnu.org/licenses/gpl.html>
+
+This is free software, you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+.fi
+.SH AUTHORS
+sakaki \(em send bug reports or comments to <sakaki@deciban.com>
+.SH "SEE ALSO"
+.BR emerge (1),
+.BR eix (1),
+.BR emaint (1),
+.BR perl-cleaner (1),
+.BR python-updater (1),
+.BR dispatch-conf (1),
+.BR buildkernel (8),
+.BR revdep-rebuild (1),
+.BR cron (8),
+.BR portage (5).
