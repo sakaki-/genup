@@ -34,5 +34,5 @@ The genup utility can be invoked in non-interative (default) or interactive mode
 
 ## Installation
 
-**genup** is best installed (on Gentoo) via its ebuild, available as part of the **sakaki-tools** overlay (available on GitHub).
+**genup** is best installed (on Gentoo) via its ebuild, available as part of the **sakaki-tools** [overlay](https://github.com/sakaki-/sakaki-tools).
 Full instructions are provided on the [Gentoo wiki](https://wiki.gentoo.org/wiki/) (forthcoming).
