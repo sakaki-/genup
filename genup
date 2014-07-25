@@ -28,7 +28,7 @@ set -u
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.0"
+VERSION="1.0.1"
 RED_TEXT="$(tput setaf 1)$(tput bold)"
 GREEN_TEXT="$(tput setaf 2)$(tput bold)"
 YELLOW_TEXT="$(tput setaf 3)$(tput bold)"
@@ -345,7 +345,7 @@ process_command_line_options() {
     declare -i RC
     set +e
         # error trapping off, as we want to handle errors
-        TEMP="$(getopt -o ab:de:hnvV --long ask,buildkernel-args:,deploy-from-staging,emerge-args:,help,no-kernel-upgrade,verbose,version -n "${PROGNAME}" -- "${@}")"
+        TEMP="$(getopt -o ab:cde:hnvV --long ask,buildkernel-args:,dispatch-conf,deploy-from-staging,emerge-args:,help,no-kernel-upgrade,verbose,version -n "${PROGNAME}" -- "${@}")"
         RC="${?}"
     set -e
     if ((RC!=0)); then
