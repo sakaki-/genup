@@ -28,11 +28,14 @@ set -u
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.1"
-RED_TEXT="$(tput setaf 1)$(tput bold)"
-GREEN_TEXT="$(tput setaf 2)$(tput bold)"
-YELLOW_TEXT="$(tput setaf 3)$(tput bold)"
-RESET_ATTS="$(tput sgr0)"
+VERSION="1.0.2"
+RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS=""
+if [[ -v TERM && -n "${TERM}" && "${TERM}" != "dumb" ]]; then
+    RED_TEXT="$(tput setaf 1)$(tput bold)"
+    GREEN_TEXT="$(tput setaf 2)$(tput bold)"
+    YELLOW_TEXT="$(tput setaf 3)$(tput bold)"
+    RESET_ATTS="$(tput sgr0)"
+fi
 declare -i VERBOSITY=1
 PREFIXSTRING="* "
 SHOWPREFIX="${GREEN_TEXT}${PREFIXSTRING}${RESET_ATTS}"
@@ -42,6 +45,11 @@ ASKFLAG=""
 EMERGEARGS=""
 BUILDKERNELARGS=""
 EIXSYNCARGS=""
+# following should already be in the environment; but to be safe...
+export NUMCPUS=$(grep -E 'processor\s+:' /proc/cpuinfo | wc -l)
+export NUMCPUSPLUSONE=$(( NUMCPUS + 1 ))
+export MAKEOPTS="${MAKEOPTS--j${NUMCPUSPLUSONE} -l${NUMCPUS}}"
+export EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS---jobs=${NUMCPUSPLUSONE} --load-average=${NUMCPUS}}"
 declare -i KERNELBUILT=0 KERNELDEPLOYED=0 NEEDSDISPATCHCONF=0
 # program arguments (booleans in this case)
 declare -i ARG_ASK=0 ARG_DEPLOYFROMSTAGING=0 ARG_HELP=0 ARG_NO_KERNEL_UPGRADE=0
