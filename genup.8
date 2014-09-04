@@ -1,4 +1,4 @@
-.TH GENUP 8 "Version 1.0.3: August 2014"
+.TH GENUP 8 "Version 1.0.4: September 2014"
 .SH NAME
 genup \- update Portage tree, all installed packages, and kernel
 .SH SYNOPSIS
@@ -28,15 +28,19 @@ updates all packages in the @world set
 .br
 (using \fBemerge --deep --with-bdeps=y --newuse --update @world\fR)
 .IP \(bu 2
+builds any external modules (such as those for VirtualBox)
+.br
+(using \fBemerge --noreplace @module-rebuild\fR)
+.IP \(bu 2
 rebuilds any packages depending on stale libraries
 .br
 (using \fBemerge @preserved-rebuild\fR)
 .IP \(bu 2
-updates any old \fBperl\fR(1) modules
+updates any old \fBperl\fR(1) modules (if desired)
 .br
 (using \fBperl-cleaner --all\fR)
 .IP \(bu 2
-updates any old \fBpython\fR(1) modules
+updates any old \fBpython\fR(1) modules (if desired)
 .br
 (using \fBpython-updater\fR)
 .IP \(bu 2
@@ -56,6 +60,14 @@ fixes missing shared library dependencies
 .br
 (using \fBrevdep-rebuild\fR)
 .IP \(bu 2
+rebuilds any packages depending on stale libraries (again)
+.br
+(using \fBemerge @preserved-rebuild\fR)
+.IP \(bu 2
+removes any unused source tarballs (if desired)
+.br
+(using \fBeclean --deep distfiles\fR)
+.IP \(bu 2
 deploys new kernel from staging (if desired and available)
 .br
 (using \fBbuildkernel --copy-from-staging\fR)
@@ -68,7 +80,7 @@ updates environment settings (as a precautionary measure)
 The \fBgenup\fR utility can be invoked in non-interative (default) or 
 interactive mode (see the \fB--ask\fR option, below).
 Non-interactive mode is suitable for use in a scripted invocation, for example
-as part of a nightly \fBcron\fR(8) job.
+as part of a nightly \fBcron\fR(8) job (see \fBAUTOMATING GENUP\fR, below).
 .SH OPTIONS
 .TP
 .BR \-a ", " \-\-ask
@@ -89,8 +101,8 @@ c) fail immediately on any error, \fBexcept\fR when that error occurs during the
 @world update \fBemerge\fR(1) (in which case, prompt whether or not to retry,
 allowing the problem \(em for example, a missing use flag \(em to be fixed in
 a separate terminal);
-d) invoke underlying tools (such as \fBbuildkernel\fR(1)) in interactive mode; and
-e) invoke \fBdispatch-conf\rR(1) to resolve clashing configuration file updates.
+d) invoke most underlying tools (such as \fBbuildkernel\fR(1)) in interactive mode; and
+e) invoke \fBdispatch-conf\fR(1) to resolve clashing configuration file updates.
 
 In both interactive and non-interactive modes, \fBgenup\fR can be instructed
 to skip the kernel rebuild check, using the \fB--no-kernel-upgrade\fR option
@@ -141,12 +153,23 @@ comfortable with such changes being made automatically on your behalf).
 .BR \-h ", " \-\-help
 Displays a short help screen, and exits.
 .TP
+.BR \-k ", " \-\-keep\-old\-distfiles
+By default, \fBgenup\fR will remove any source tarballs that have previously
+been downloaded by Portage, but which do not relate to the installed version of
+any package. This option inhibits such cleaning.
+.TP
 .BR \-n ", " \-\-no\-kernel\-upgrade
 Do not perform (in non-interactive mode) or offer to perform (in interactive
 mode) a kernel recompile, even should a newer version be available. 
 
 Note, this does \fBnot\fR itself prevent the update of \fBgentoo-sources\fR (or similar
 package), during the @world \fBemerge\fR(1) step.
+.TP
+.BR \-p ", " \-\-no\-perl\-cleaner
+Do not attempt to run \fBperl-cleaner\fR(1) during the process.
+.TP
+.BR \-P ", " \-\-no\-python\-updater
+Do not attempt to run \fBpython-updater\fR(1) during the process.
 .TP
 .BR \-v ", " \-\-verbose
 Provides more verbose output from invoked tools, where possible.
@@ -155,6 +178,29 @@ Provides more verbose output from invoked tools, where possible.
 Displays the version number of \fBgenup\fR, and exits.
 .SH EXIT STATUS
 The exit status is 0 if the update completed successfully, and 1 otherwise.
+.SH PARALLEL MAKE
+Quite frequently, large \fBemerge\fR(1) runs fail because one
+or more of the invoked ebuilds have problems running with parallel
+\fBmake\fR(1) (as set via MAKEOPTS="-jN", where N>1).
+
+Because of this, \fBgenup\fR will attempt to
+automatically resume any \fBemerge\fR(1) operation with parallel make
+inhibited, should the original operation fail. A warning is issued if this
+happens.
+.SH AUTOMATING GENUP
+Should you wish to run \fBgenup\fR automatically, you need to ensure it has
+an appropriate environment.
+For example, you could put the following script in
+\fI/etc/cron.daily/genup\fR, to execute an update nightly (be sure to make
+the file executable):
+.nf
+.RS
+
+#!/bin/bash
+export PATH="/usr/local/sbin:/usr/local/bin:"\\
+"/usr/sbin:/usr/bin:/sbin:/bin:/opt/bin"
+genup >/var/log/latest-genup-run.log 2>&1
+.fi
 .SH COPYRIGHT
 .nf
 Copyright \(co 2014 sakaki
@@ -167,12 +213,14 @@ There is NO WARRANTY, to the extent permitted by law.
 .SH AUTHORS
 sakaki \(em send bug reports or comments to <sakaki@deciban.com>
 .SH "SEE ALSO"
+.BR dispatch-conf (1),
+.BR eclean (1),
 .BR emerge (1),
 .BR eix (1),
 .BR emaint (1),
+.BR make (1),
 .BR perl-cleaner (1),
 .BR python-updater (1),
-.BR dispatch-conf (1),
 .BR buildkernel (8),
 .BR revdep-rebuild (1),
 .BR cron (8),

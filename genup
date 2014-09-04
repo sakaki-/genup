@@ -28,7 +28,7 @@ set -u
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.3"
+VERSION="1.0.4"
 RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS=""
 if [[ -v TERM && -n "${TERM}" && "${TERM}" != "dumb" ]]; then
     RED_TEXT="$(tput setaf 1)$(tput bold)"
@@ -54,6 +54,8 @@ declare -i KERNELBUILT=0 KERNELDEPLOYED=0 NEEDSDISPATCHCONF=0
 # program arguments (booleans in this case)
 declare -i ARG_ASK=0 ARG_DEPLOYFROMSTAGING=0 ARG_HELP=0 ARG_NO_KERNEL_UPGRADE=0
 declare -i ARG_VERBOSE=0 ARG_VERSION=0 ARG_DISPATCHCONF=0
+declare -i ARG_KEEP_OLD_DISTFILES=0
+declare -i ARG_NO_PERL_CLEANER=0 ARG_NO_PYTHON_UPDATER=0
 
 # ***************** various functions ****************** 
 cleanup_and_exit_with_code() {
@@ -114,8 +116,10 @@ display_greeting() {
     show "Gentoo System Updater v${VERSION}"
 }
 update_portage_tree_and_sync_eix() {
-    show "Updating Portage tree and syncing the eix cache..."
-    eix-sync ${EIXSYNCARGS}
+    show "Updating Portage tree and syncing the eix cache"
+    show "(this may take some time)..."
+    # do this quietly, to avoid flooding the logs / screen
+    eix-sync -q ${EIXSYNCARGS}
 }
 remove_any_prior_emerge_resume_history() {
     # as if we call emerge --resume later, we don't want any hangovers from the
@@ -134,26 +138,38 @@ update_all_packages_in_world_set_and_dependencies() {
     # will not re-emerge packages that are already up-to-date
     declare -i RC
     show "Updating @world set (for new versions, or changed use flags)..."
-    # turn fail-on-error off, so we can handle errors here
-    set +e
-        emerge ${ASKFLAG} ${VERBOSITYFLAG} ${EMERGEARGS} --deep --with-bdeps=y --newuse --update --backtrack=50 @world
-        RC="${?}"
-    set -e
-    while ((RC!=0 && ARG_ASK==1)); do
-        warning "emerge did not complete successfully"
-        show "You can try to fix the problem in another console, then return here"
-        show "and resume the emerge"
-        continue_yn "Attempt to resume the emerge now"
-        # got here, so user didn't abort - attempt to try again from where we
-        # left off
-        set -e
-            emerge --continue
-            RC="${?}"
-        set +e
-    done
-    # if there is still a problem at the end, bail out
-    if ((RC!=0)); then
-        die "Failed to complete the emerge due to error"
+    
+    if ! emerge ${ASKFLAG} ${VERBOSITYFLAG} ${EMERGEARGS} --deep \
+        --with-bdeps=y --newuse --update --backtrack=50 @world; then
+        # per make manpage, if multiple "j" opts are specified, the last
+        # one takes precedence, so this is legitimate
+        if MAKEOPTS="${MAKEOPTS-} -j1" emerge --resume; then
+            warning "emerge completed successfully, but only by restricting"
+            warning "build parallelism"
+        else
+            # we still have a problem, allow the user to attempt to fix if
+            # running interactively
+            if ((ARG_ASK==1)); then
+                warning "emerge did not complete successfully"
+                show "You can try to fix the problem in another console, then return here"
+                show "and resume the emerge"
+                continue_yn "Attempt to resume the emerge now"
+                MAKEOPTS="${MAKEOPTS-} -j1" emerge --resume
+            else
+                die "Failed to complete the emerge due to error"
+            fi
+        fi
+    fi
+}
+rebuild_external_modules_if_necessary() {
+    show "Creating any necessary external modules (e.g., VirtualBox)..."
+    if ! emerge ${VERBOSITYFLAG} --noreplace @module-rebuild; then
+        if MAKEOPTS="${MAKEOPTS-} -j1" emerge --resume; then
+            warning "emerge @module-rebuild completed successfully, but only by restricting"
+            warning "build parallelism"
+        else
+            die "Failed to complete emerge @module-rebuild due to error"
+        fi
     fi
 }
 rebuild_packages_depending_on_stale_libraries() {
@@ -164,20 +180,31 @@ rebuild_packages_depending_on_stale_libraries() {
     # the below emerge will rebuild any such consumers, so that the old
     # library may be freed
     show "Rebuilding any consumers of old shared libraries, which did not autoupdate..."
-    emerge ${VERBOSITYFLAG} @preserved-rebuild
+    if ! emerge ${VERBOSITYFLAG} @preserved-rebuild; then
+        if MAKEOPTS="${MAKEOPTS-} -j1" emerge --resume; then
+            warning "emerge @preserved-rebuild completed successfully, but only by restricting"
+            warning "build parallelism"
+        else
+            die "Failed to complete emerge @preserved-rebuild due to error"
+        fi
+    fi
 }
 bring_old_perl_modules_up_to_date() {
     # perl modules are built for a particular perl target, but are *not*
     # automatically rebuilt when perl upgrades to a higher version - the
     # below script fixes this
-    show "Ensuring perl modules are matched to current version of perl..."
-    perl-cleaner ${VERBOSITYFLAG} --all
+    if ((ARG_NO_PERL_CLEANER==0)); then
+        show "Ensuring perl modules are matched to current version of perl..."
+        perl-cleaner ${VERBOSITYFLAG} --all
+    fi
 }
 bring_old_python_modules_up_to_date() {
     # find and rebuild any packages that may have been broken due to a Python
     # upgrade
-    show "Ensuring all packages consistent with current python version..."
-    python-updater ${VERBOSITYFLAG}
+    if ((ARG_NO_PYTHON_UPDATER==0)); then
+        show "Ensuring all packages consistent with current python version..."
+        python-updater ${VERBOSITYFLAG}
+    fi
 }
 check_if_dispatch_conf_needs_to_be_run() {
     # check if the user has any configuration file changes pending review
@@ -236,6 +263,16 @@ offer_kernel_upgrade_to_staging_if_available() {
         show "Your kernel (${CURRENT_KV}) is the latest version available!"
     fi
 }
+purge_old_distfiles_if_desired() {
+    # by default, Portage keeps old source tarballs (distfiles) around
+    # forever (in /usr/portage/distfiles); the following command, from the
+    # gentoolkit package, will get rid of any not related to a currently
+    # installed ebuild
+    if ((ARG_KEEP_OLD_DISTFILES==0)); then
+        show "Purging currently unused source tarballs to save space..."
+        eclean ${VERBOSITYFLAG} --deep distfiles
+    fi
+}
 copy_new_kernel_from_staging_if_present_and_desired() {
     declare -i DO_KERNELDEPLOY=0
     if ((KERNELBUILT==1)); then
@@ -285,6 +322,12 @@ display_final_status() {
             show "You can install it to your EFI system partition by issuing:"
             show "  buildkernel --copy-from-staging"
         fi
+    elif buildkernel --is-new-kernel-available; then
+        warning "You are currently running with an older kernel"
+        warning "When ready, ensure you have copied the new version"
+        warning "to the EFI system partition"
+        warning "(using buildkernel --copy-from-staging), and then reboot to"
+        warning "start using it."
     fi
     if ((NEEDSDISPATCHCONF==2)); then
         # double-check that the user resolved everything earlier
@@ -321,8 +364,14 @@ Options:
                         e.g., use --emerge-args='--autounmask-write' to
                         automatically make necessary changes to config files
   -h, --help            show this help message and exit
+  -k, --keep-old-distfiles
+                        don't purge source tarballs (distfiles) for uninstalled
+                        versions of packages (or uninstalled packages)
   -n, --no-kernel-upgrade
                         do not attempt to run buildkernel
+  -p, --no-perl-cleaner do not attempt to run perl-cleaner
+  -P, --no-python-updater
+                        do not attept to run python-updater
   -v, --verbose         ask called programs to display more information
   -V, --version         display the version number of ${PROGNAME} and exit
 EOF
@@ -353,7 +402,7 @@ process_command_line_options() {
     declare -i RC
     set +e
         # error trapping off, as we want to handle errors
-        TEMP="$(getopt -o ab:cde:hnvV --long ask,buildkernel-args:,dispatch-conf,deploy-from-staging,emerge-args:,help,no-kernel-upgrade,verbose,version -n "${PROGNAME}" -- "${@}")"
+        TEMP="$(getopt -o ab:cde:hknpPvV --long ask,buildkernel-args:,dispatch-conf,deploy-from-staging,emerge-args:,help,keep-old-distfiles,no-kernel-upgrade,no-perl-cleaner,no-python-updater,verbose,version -n "${PROGNAME}" -- "${@}")"
         RC="${?}"
     set -e
     if ((RC!=0)); then
@@ -378,7 +427,10 @@ process_command_line_options() {
                     *) EMERGEARGS="${2}" ; shift 2 ;;
                 esac ;;
             -h|--help) ARG_HELP=1 ; shift ;;
+            -k|--keep-old-distfiles) ARG_KEEP_OLD_DISTFILES=1 ; shift ;;
             -n|--no-kernel-upgrade) ARG_NO_KERNEL_UPGRADE=1 ; shift ;;
+            -p|--no-perl-cleaner) ARG_NO_PERL_CLEANER=1 ; shift ;;
+            -P|--no-python-updater) ARG_NO_PYTHON_UPDATER=1 ; shift ;;
             -v|--verbose) ARG_VERBOSE=1 ; shift ;;
             -V|--version) ARG_VERSION=1 ; shift ;;
             --) shift ; break ;;
@@ -415,6 +467,7 @@ update_portage_tree_and_sync_eix
 remove_any_prior_emerge_resume_history
 ensure_portage_itself_is_up_to_date
 update_all_packages_in_world_set_and_dependencies
+rebuild_external_modules_if_necessary
 rebuild_packages_depending_on_stale_libraries
 bring_old_perl_modules_up_to_date
 bring_old_python_modules_up_to_date
@@ -422,6 +475,8 @@ interactively_resolve_clashing_config_file_changes
 offer_kernel_upgrade_to_staging_if_available
 remove_unreferenced_packages
 rebuild_where_missing_libraries_detected
+rebuild_packages_depending_on_stale_libraries
+purge_old_distfiles_if_desired
 copy_new_kernel_from_staging_if_present_and_desired
 update_environment
 display_final_status
