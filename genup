@@ -28,7 +28,7 @@ set -u
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.5"
+VERSION="1.0.6"
 RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS=""
 if [[ -v TERM && -n "${TERM}" && "${TERM}" != "dumb" ]]; then
     RED_TEXT="$(tput setaf 1)$(tput bold)"
@@ -168,7 +168,8 @@ rebuild_external_modules_if_necessary() {
             warning "emerge @module-rebuild completed successfully, but only by restricting"
             warning "build parallelism"
         else
-            die "Failed to complete emerge @module-rebuild due to error"
+            warning "Failed to complete emerge @module-rebuild due to error"
+            warning "Continuing..."
         fi
     fi
 }
