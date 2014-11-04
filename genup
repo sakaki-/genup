@@ -28,7 +28,8 @@ set -u
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.6"
+VERSION="1.0.7"
+ETCPROFILE="/etc/profile"
 RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS=""
 if [[ -v TERM && -n "${TERM}" && "${TERM}" != "dumb" ]]; then
     RED_TEXT="$(tput setaf 1)$(tput bold)"
@@ -110,6 +111,27 @@ suppress_colour_if_output_not_to_a_terminal() {
     if [ ! -t 1 -o ! -t 2 ]; then
         # we are going to a non-terminal
         suppress_colours
+    fi
+}
+check_gcc_config_and_reset_if_necessary() {
+    # check if gcc-config exists with an error - if it does, then
+    # attempt to set one based on the current gcc version number
+    if ! gcc-config --get-current-profile >/dev/null 2>&1; then
+        # unset or invalid, attempt to force this to the current gcc
+        # version
+        local GCC_VERSION="$(gcc --version | head -n 1 | sed 's/^.* //')"
+        if gcc-config "${GCC_VERSION}"; then
+            warning "gcc configuration was reset"
+            if [ -s "${ETCPROFILE}" ]; then
+                set +e
+                set +u
+                source "${ETCPROFILE}"
+                set -e
+                set -u
+            fi
+        else
+            die "failed to set gcc configuration"
+        fi
     fi
 }
 display_greeting() {
@@ -304,6 +326,9 @@ remove_unreferenced_packages() {
     # required by the transitive closure of @world set dependencies
     show "Removing packages not required by @world set..."
     emerge ${ASKFLAG} ${VERBOSITYFLAG} --depclean
+    # we may have just blown away our old version of gcc, but not enabled
+    # the replacement version's config, so...
+    check_gcc_config_and_reset_if_necessary
 }
 rebuild_where_missing_libraries_detected() {
     # check for missing shared library dependencies (possibly caused by
@@ -464,6 +489,7 @@ suppress_colour_if_output_not_to_a_terminal
 process_command_line_options "${@}"
 check_if_using_webrsync_gpg
 display_greeting
+check_gcc_config_and_reset_if_necessary
 update_portage_tree_and_sync_eix
 remove_any_prior_emerge_resume_history
 ensure_portage_itself_is_up_to_date
