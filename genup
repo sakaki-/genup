@@ -28,14 +28,15 @@ set -u
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.7"
+VERSION="1.0.8"
 ETCPROFILE="/etc/profile"
-RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS=""
+RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS="" ALERT_TEXT=""
 if [[ -v TERM && -n "${TERM}" && "${TERM}" != "dumb" ]]; then
     RED_TEXT="$(tput setaf 1)$(tput bold)"
     GREEN_TEXT="$(tput setaf 2)$(tput bold)"
     YELLOW_TEXT="$(tput setaf 3)$(tput bold)"
     RESET_ATTS="$(tput sgr0)"
+    ALERT_TEXT="$(tput bel)"
 fi
 declare -i VERBOSITY=1
 PREFIXSTRING="* "
@@ -43,6 +44,7 @@ SHOWPREFIX="${GREEN_TEXT}${PREFIXSTRING}${RESET_ATTS}"
 SHOWSUFFIX=""
 VERBOSITYFLAG=""
 ASKFLAG=""
+ALERTFLAG=""
 EMERGEARGS=""
 BUILDKERNELARGS=""
 EIXSYNCARGS=""
@@ -56,7 +58,8 @@ declare -i KERNELBUILT=0 KERNELDEPLOYED=0 NEEDSDISPATCHCONF=0
 declare -i ARG_ASK=0 ARG_DEPLOYFROMSTAGING=0 ARG_HELP=0 ARG_NO_KERNEL_UPGRADE=0
 declare -i ARG_VERBOSE=0 ARG_VERSION=0 ARG_DISPATCHCONF=0
 declare -i ARG_KEEP_OLD_DISTFILES=0
-declare -i ARG_NO_PERL_CLEANER=0 ARG_NO_PYTHON_UPDATER=0
+declare -i ARG_NO_PERL_CLEANER=0 ARG_NO_PYTHON_UPDATER=0 ARG_ALERT=0
+declare -i ARG_IGNORE_REQUIRED_CHANGES=0
 
 # ***************** various functions ****************** 
 cleanup_and_exit_with_code() {
@@ -69,6 +72,15 @@ show() {
     local VERBLEVEL=${2:-${VERBOSITY}}
     if (( VERBLEVEL >=1 )); then
         echo -e "${SHOWPREFIX}${MESSAGE}${SHOWSUFFIX}"
+    fi
+}
+alertshow() {
+    local MESSAGE=${1:-""}
+    local VERBLEVEL=${2:-${VERBOSITY}}
+    if ((ARG_ALERT==0)); then
+        show "${@}"
+    elif (( VERBLEVEL >=1 )); then
+        echo -e "${SHOWPREFIX}${MESSAGE}${SHOWSUFFIX}${ALERT_TEXT}"
     fi
 }
 warning() {
@@ -85,7 +97,7 @@ trap_cleanup() {
 }
 trap trap_cleanup SIGHUP SIGQUIT SIGINT SIGTERM SIGKILL EXIT
 test_yn() {
-    echo -n -e "${SHOWPREFIX}${1} (y/n)? ${SHOWSUFFIX}"
+    echo -n -e "${SHOWPREFIX}${1} (y/n)? ${SHOWSUFFIX}${ALERT_TEXT}"
     read -r -n 1
     echo
     if [[ ${REPLY} =~ ^[Yy]$ ]]; then
@@ -107,10 +119,14 @@ suppress_colours() {
     RESET_ATTS=""
     SHOWPREFIX="${PREFIXSTRING}"
 }
-suppress_colour_if_output_not_to_a_terminal() {
+suppress_alert() {
+    ALERT_TEXT=""
+}
+suppress_colour_and_alert_if_output_not_to_a_terminal() {
     if [ ! -t 1 -o ! -t 2 ]; then
         # we are going to a non-terminal
         suppress_colours
+        suppress_alert
     fi
 }
 check_gcc_config_and_reset_if_necessary() {
@@ -158,10 +174,22 @@ update_all_packages_in_world_set_and_dependencies() {
     # will update any package whose use flags have changed
     # the @world set includes the @system set
     # will not re-emerge packages that are already up-to-date
-    declare -i RC
+    declare -i RC USER_CHANGES_REQUIRED=0
     show "Updating @world set (for new versions, or changed use flags)..."
-    
-    if ! emerge ${ASKFLAG} ${VERBOSITYFLAG} ${EMERGEARGS} --deep \
+    if ((ARG_ASK==0 && ARG_IGNORE_REQUIRED_CHANGES==0)); then
+        # if in non-interactive mode, we'll check first if the build
+        # looks possible (as emerge does not return an error code if
+        # a user modification to package.use etc. is required to proceed)
+        # you can set the --ignore-required-changes option to
+        # suppress this test
+        if grep -qi "The following \(keyword\|mask\|USE\|license\) changes are necessary to proceed" \
+            <(emerge ${VERBOSITYFLAG} ${EMERGEARGS} --pretend --deep \
+            --with-bdeps=y --newuse --update --backtrack=50 @world 2>&1 || true); then
+            # silently note this fact, then fail later
+            USER_CHANGES_REQUIRED=1
+        fi
+    fi
+    if ! emerge ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} ${EMERGEARGS} --deep \
         --with-bdeps=y --newuse --update --backtrack=50 @world; then
         # per make manpage, if multiple "j" opts are specified, the last
         # one takes precedence, so this is legitimate
@@ -181,6 +209,14 @@ update_all_packages_in_world_set_and_dependencies() {
                 die "Failed to complete the emerge due to error"
             fi
         fi
+    fi
+    # this may have looked like it went OK, but still failed, because user
+    # changes to e.g. /etc/portage/package.use are required (the resume
+    # list will be empty in this case, so the retry with parallelism
+    # off will 'succeed'): if this happens we'll bail out (unless explicitly
+    # requested not to, via the --ignore-required-changes option)
+    if ((USER_CHANGES_REQUIRED==1)); then
+        die "Could not update @world because config changes required (please see above)"
     fi
 }
 rebuild_external_modules_if_necessary() {
@@ -248,7 +284,7 @@ interactively_resolve_clashing_config_file_changes() {
     check_if_dispatch_conf_needs_to_be_run
     if ((NEEDSDISPATCHCONF==1)); then
         if ((ARG_ASK==1 || ARG_DISPATCHCONF==1)); then
-            show "Handing any updated configuration file clashes..."
+            alertshow "Handing any updated configuration file clashes..."
             dispatch-conf
             NEEDSDISPATCHCONF=2 # special flag; we'll recheck later
         fi
@@ -274,7 +310,7 @@ offer_kernel_upgrade_to_staging_if_available() {
             show "Entering buildkernel..."
             # following does not require your USB key to be inserted, as it
             # only builds to staging in /boot...
-            buildkernel ${ASKFLAG} ${VERBOSITYFLAG} ${BUILDKERNELARGS} --stage-only
+            buildkernel ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} ${BUILDKERNELARGS} --stage-only
             KERNELBUILT=1
         else
             show "OK, leaving your kernel as is, to upgrade subsequently, issue:"
@@ -310,7 +346,7 @@ copy_new_kernel_from_staging_if_present_and_desired() {
         fi
         if ((DO_KERNELDEPLOY==1)); then
             show "Copying new kernel from staging..."
-            buildkernel ${ASKFLAG} ${VERBOSITYFLAG} --copy-from-staging
+            buildkernel ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} --copy-from-staging
             KERNELDEPLOYED=1
         fi
     fi
@@ -325,7 +361,7 @@ remove_unreferenced_packages() {
     # following should be reasonably safe, it removes any packages that are not
     # required by the transitive closure of @world set dependencies
     show "Removing packages not required by @world set..."
-    emerge ${ASKFLAG} ${VERBOSITYFLAG} --depclean
+    emerge ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} --depclean
     # we may have just blown away our old version of gcc, but not enabled
     # the replacement version's config, so...
     check_gcc_config_and_reset_if_necessary
@@ -378,6 +414,8 @@ Usage: ${PROGNAME} [options]
 
 Options:
   -a, --ask             turns on interactive mode: you must confirm key actions
+  -A, --alert           sound terminal bell when interaction required
+                        (selecting this also automatically selects --ask)
   -b, --buildkernel-args=ARGS
                         pass provided additional ARGS to the initial
                         (staging) buildkernel invocation
@@ -390,6 +428,10 @@ Options:
                         e.g., use --emerge-args='--autounmask-write' to
                         automatically make necessary changes to config files
   -h, --help            show this help message and exit
+  -i, --ignore-required-changes
+                        don't exit with an error in the event that user-driven
+                        changes are required (to /etc/portage/package.use etc.)
+                        in order to complete the @world update step
   -k, --keep-old-distfiles
                         don't purge source tarballs (distfiles) for uninstalled
                         versions of packages (or uninstalled packages)
@@ -428,7 +470,7 @@ process_command_line_options() {
     declare -i RC
     set +e
         # error trapping off, as we want to handle errors
-        TEMP="$(getopt -o ab:cde:hknpPvV --long ask,buildkernel-args:,dispatch-conf,deploy-from-staging,emerge-args:,help,keep-old-distfiles,no-kernel-upgrade,no-perl-cleaner,no-python-updater,verbose,version -n "${PROGNAME}" -- "${@}")"
+        TEMP="$(getopt -o aAb:cde:hiknpPvV --long ask,alert,buildkernel-args:,dispatch-conf,deploy-from-staging,emerge-args:,help,ignore-required-changes,keep-old-distfiles,no-kernel-upgrade,no-perl-cleaner,no-python-updater,verbose,version -n "${PROGNAME}" -- "${@}")"
         RC="${?}"
     set -e
     if ((RC!=0)); then
@@ -440,6 +482,7 @@ process_command_line_options() {
     while true ; do
         case "${1}" in
             -a|--ask) ARG_ASK=1 ; shift ;;
+            -A|--alert) ARG_ALERT=1 ; ARG_ASK=1 ; shift ;;
             -b|--buildkernel-args)
                 case "${2}" in
                     "") shift 2 ;;
@@ -453,6 +496,7 @@ process_command_line_options() {
                     *) EMERGEARGS="${2}" ; shift 2 ;;
                 esac ;;
             -h|--help) ARG_HELP=1 ; shift ;;
+            -i|--ignore-required-changes) ARG_IGNORE_REQUIRED_CHANGES=1 ; shift ;;
             -k|--keep-old-distfiles) ARG_KEEP_OLD_DISTFILES=1 ; shift ;;
             -n|--no-kernel-upgrade) ARG_NO_KERNEL_UPGRADE=1 ; shift ;;
             -p|--no-perl-cleaner) ARG_NO_PERL_CLEANER=1 ; shift ;;
@@ -482,10 +526,15 @@ process_command_line_options() {
     if ((ARG_ASK==1)); then
         ASKFLAG="--ask"
     fi
+    if ((ARG_ALERT==1)); then
+        ALERTFLAG="--alert"
+    else
+        suppress_alert
+    fi
 }
 
 # *************** start of script proper ***************
-suppress_colour_if_output_not_to_a_terminal
+suppress_colour_and_alert_if_output_not_to_a_terminal
 process_command_line_options "${@}"
 check_if_using_webrsync_gpg
 display_greeting

@@ -1,4 +1,4 @@
-.TH GENUP 8 "Version 1.0.7: November 2014"
+.TH GENUP 8 "Version 1.0.8: August 2015"
 .SH NAME
 genup \- update Portage tree, all installed packages, and kernel
 .SH SYNOPSIS
@@ -108,6 +108,10 @@ In both interactive and non-interactive modes, \fBgenup\fR can be instructed
 to skip the kernel rebuild check, using the \fB--no-kernel-upgrade\fR option
 (see below).
 .TP
+.BR \-A ", " \-\-alert
+If possible, sounds the terminal bell when interaction is needed.
+Selecting this option automatically selects \fB--ask\fR.
+.TP
 .BR \-b ", " \-\-buildkernel\-args\=ADDITIONAL_ARGS
 Passes the specified arguments to the main
 .BR buildkernel (8)
@@ -148,10 +152,26 @@ additional use flags, allowing libraries, and so on), provided the Portage
 \fB--autounmask\fR option is enabled (which by default it is).
 This can be useful when
 running \fBgenup\fR in an unattended situation (assuming of course you are
-comfortable with such changes being made automatically on your behalf).
+comfortable with such changes being made automatically on your behalf; you
+will of course still get a chance to review any changes made via
+the \fBdispatch-conf\fR(1) mechanism).
+Note also that if you do use this approach, you should also specify
+the \fB--ignore-required-changes\fR option.
 .TP
 .BR \-h ", " \-\-help
 Displays a short help screen, and exits.
+.TP
+.BR \-i ", " \-\-ignore\-required\-changes
+By default, wqhen running in non-interactive mode, \fBgenup\fR checks to see if
+the \fBemerge @world\fR step would fail due to required user changes
+(to \fI/etc/portage/package.use\fR etc.), and stops with an error if so.
+This option suppresses that check.
+
+Note that specifying this option (in non-interactive mode) can result in cases
+where your \fBgenup\fR run completes successfully, but the \fB@world\fR set
+has \fBnot\fR, in fact, been brought fully up to date.
+
+It has no effect in interactive mode.
 .TP
 .BR \-k ", " \-\-keep\-old\-distfiles
 By default, \fBgenup\fR will remove any source tarballs that have previously
@@ -203,7 +223,7 @@ genup >/var/log/latest-genup-run.log 2>&1
 .fi
 .SH COPYRIGHT
 .nf
-Copyright \(co 2014 sakaki
+Copyright \(co 2014-2015 sakaki
 License GPLv3+ (GNU GPL version 3 or later)
 <http://gnu.org/licenses/gpl.html>
 
