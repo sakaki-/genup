@@ -11,6 +11,8 @@ Tool to update the **Portage**(5) tree, all installed packages, and kernel, unde
 (using `emerge --oneshot --update portage`)
 * updates all packages in the @world set
 (using `emerge --deep --with-bdeps=y --newuse --update @world`)
+* rebuilds any external modules (such as those for VirtualBox)
+(using `emerge @module-rebuild`)
 * rebuilds any packages depending on stale libraries
 (using `emerge @preserved-rebuild`)
 * updates any old perl(1) modules
@@ -25,6 +27,10 @@ Tool to update the **Portage**(5) tree, all installed packages, and kernel, unde
 (using `emerge --depclean`)
 * fixes missing shared library dependencies
 (using `revdep-rebuild`)
+* rebuilds any packages depending on stale libraries (again)
+(using `emerge @preserved-rebuild`)
+* removes any unused source tarballs (if desired)
+(using `eclean --deep distfiles`)
 * deploys new kernel from staging (if desired and available)
 (using `buildkernel --copy-from-staging`)
 * updates environment settings (as a precautionary measure)
