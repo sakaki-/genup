@@ -384,12 +384,14 @@ display_final_status() {
             show "You can install it to your EFI system partition by issuing:"
             show "  buildkernel --copy-from-staging"
         fi
-    elif buildkernel --is-new-kernel-available; then
-        warning "You are currently running with an older kernel"
-        warning "When ready, ensure you have copied the new version"
-        warning "to the EFI system partition"
-        warning "(using buildkernel --copy-from-staging), and then reboot to"
-        warning "start using it."
+    elif ((ARG_NO_KERNEL_UPGRADE==0)); then
+        if buildkernel --is-new-kernel-available; then
+            warning "You are currently running with an older kernel"
+            warning "When ready, ensure you have copied the new version"
+            warning "to the EFI system partition"
+            warning "(using buildkernel --copy-from-staging), and then reboot to"
+            warning "start using it."
+        fi
     fi
     if ((NEEDSDISPATCHCONF==2)); then
         # double-check that the user resolved everything earlier
