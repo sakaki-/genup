@@ -5,7 +5,7 @@
 # Will offer to update the kernel, if a new version has become available.
 # Intended to be run interactively.
 #
-# Copyright (c) 2014 sakaki <sakaki@deciban.com>
+# Copyright (c) 2014-2015 sakaki <sakaki@deciban.com>
 #
 # License (GPL v3.0)
 # ------------------
@@ -28,7 +28,7 @@ set -u
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.8"
+VERSION="1.0.9"
 ETCPROFILE="/etc/profile"
 RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS="" ALERT_TEXT=""
 if [[ -v TERM && -n "${TERM}" && "${TERM}" != "dumb" ]]; then
@@ -42,12 +42,18 @@ declare -i VERBOSITY=1
 PREFIXSTRING="* "
 SHOWPREFIX="${GREEN_TEXT}${PREFIXSTRING}${RESET_ATTS}"
 SHOWSUFFIX=""
+# following variable is conformed on installation by ebuild
+# (to reflect setting of "buildkernel" USE flag)
+USE_BUILDKERNEL=true
 VERBOSITYFLAG=""
 ASKFLAG=""
 ALERTFLAG=""
 EMERGEARGS=""
 BUILDKERNELARGS=""
 EIXSYNCARGS=""
+PUMP=""
+NOPUMP="-distcc -distcc-pump"
+PORTAGEFEATURES=""
 # following should already be in the environment; but to be safe...
 export NUMCPUS=$(grep -E 'processor\s+:' /proc/cpuinfo | wc -l)
 export NUMCPUSPLUSONE=$(( NUMCPUS + 1 ))
@@ -178,9 +184,7 @@ update_all_packages_in_world_set_and_dependencies() {
     show "Updating @world set (for new versions, or changed use flags)..."
     if ((ARG_ASK==0 && ARG_IGNORE_REQUIRED_CHANGES==0)); then
         # if in non-interactive mode, we'll check first if the build
-        # looks possible (as emerge does not return an error code if
-        # a user modification to package.use etc. is required to proceed)
-        # you can set the --ignore-required-changes option to
+        # looks possible; you can set the --ignore-required-changes option to
         # suppress this test
         if grep -qi "The following \(keyword\|mask\|USE\|license\) changes are necessary to proceed" \
             <(emerge ${VERBOSITYFLAG} ${EMERGEARGS} --pretend --deep \
@@ -189,13 +193,13 @@ update_all_packages_in_world_set_and_dependencies() {
             USER_CHANGES_REQUIRED=1
         fi
     fi
-    if ! emerge ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} ${EMERGEARGS} --deep \
+    if ! ${PUMP} emerge ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} ${EMERGEARGS} --deep \
         --with-bdeps=y --newuse --update --backtrack=50 @world; then
         # per make manpage, if multiple "j" opts are specified, the last
         # one takes precedence, so this is legitimate
-        if MAKEOPTS="${MAKEOPTS-} -j1" emerge --resume; then
+        if MAKEOPTS="${MAKEOPTS-} -j1" FEATURES="${NOPUMP}" emerge --resume; then
             warning "emerge completed successfully, but only by restricting"
-            warning "build parallelism"
+            warning "build parallelism and distcc"
         else
             # we still have a problem, allow the user to attempt to fix if
             # running interactively
@@ -221,10 +225,10 @@ update_all_packages_in_world_set_and_dependencies() {
 }
 rebuild_external_modules_if_necessary() {
     show "Creating any necessary external modules (e.g., VirtualBox)..."
-    if ! emerge ${VERBOSITYFLAG} @module-rebuild; then
-        if MAKEOPTS="${MAKEOPTS-} -j1" emerge --resume; then
+    if ! ${PUMP} emerge ${VERBOSITYFLAG} @module-rebuild; then
+        if MAKEOPTS="${MAKEOPTS-} -j1" FEATURES="${NOPUMP}" emerge --resume; then
             warning "emerge @module-rebuild completed successfully, but only by restricting"
-            warning "build parallelism"
+            warning "build parallelism and distcc"
         else
             warning "Failed to complete emerge @module-rebuild due to error"
             warning "Continuing..."
@@ -239,10 +243,10 @@ rebuild_packages_depending_on_stale_libraries() {
     # the below emerge will rebuild any such consumers, so that the old
     # library may be freed
     show "Rebuilding any consumers of old shared libraries, which did not autoupdate..."
-    if ! emerge ${VERBOSITYFLAG} @preserved-rebuild; then
-        if MAKEOPTS="${MAKEOPTS-} -j1" emerge --resume; then
+    if ! ${PUMP} emerge ${VERBOSITYFLAG} @preserved-rebuild; then
+        if MAKEOPTS="${MAKEOPTS-} -j1" FEATURES="${NOPUMP}" emerge --resume; then
             warning "emerge @preserved-rebuild completed successfully, but only by restricting"
-            warning "build parallelism"
+            warning "build parallelism and distcc"
         else
             die "Failed to complete emerge @preserved-rebuild due to error"
         fi
@@ -420,11 +424,13 @@ Options:
                         (selecting this also automatically selects --ask)
   -b, --buildkernel-args=ARGS
                         pass provided additional ARGS to the initial
-                        (staging) buildkernel invocation
+                        (staging) buildkernel invocation (requires buildkernel
+                        USE flag to have been set)
   -c, --dispatch-conf   run dispatch-conf, even if in non-interactive mode
   -d, --deploy-from-staging
                         if an updated kernel is successfully built in staging,
                         afterwards try to copy it onto the EFI system partition
+                        (requires buildkernel USE flag to have been set)
   -e, --emerge-args=ARGS
                         pass provided additional ARGS to the main emerge
                         e.g., use --emerge-args='--autounmask-write' to
@@ -438,7 +444,8 @@ Options:
                         don't purge source tarballs (distfiles) for uninstalled
                         versions of packages (or uninstalled packages)
   -n, --no-kernel-upgrade
-                        do not attempt to run buildkernel
+                        do not attempt to run buildkernel (implied if
+                        buildkernel USE flag has not been set)
   -p, --no-perl-cleaner do not attempt to run perl-cleaner
   -P, --no-python-updater
                         do not attept to run python-updater
@@ -456,15 +463,50 @@ print_version() {
     printf "%s\n" "${VERSION}"
 }
 display_usage_message_and_bail_out() {
+    if [ ! -z "${1+x}" ]; then
+        printf "%s: %s\n" "${PROGNAME}" "${1}" >&2
+    fi
     print_usage >&2
     cleanup_and_exit_with_code 1
 }
+internal_consistency_option_checks() {
+    # following not exhaustive, just some more obvious snafus
+    local KERNMSG="--no-kernel-upgrade"
+    if ! "${USE_BUILDKERNEL}"; then
+        KERNMSG="buildkernel USE flag unset"
+    fi
+    if ((ARG_NO_KERNEL_UPGRADE==1)) || ! "${USE_BUILDKERNEL}"; then
+        if [[ -n "${BUILDKERNELARGS}" ]]; then
+            display_usage_message_and_bail_out "cannot specify --buildkernel-args with ${KERNMSG}"
+        fi
+        if ((ARG_DEPLOYFROMSTAGING==1)); then
+            display_usage_message_and_bail_out "cannot specify --deploy-from-staging with ${KERNMSG}"
+        fi
+    fi
+}
+read_portage_features_if_necessary() {
+    if [ -z "${PORTAGEFEATURES}" ]; then
+        show "Checking Portage configuration, please wait..."
+        PORTAGEFEATURES=$(grep '^FEATURES.*$' <(emerge --info))
+    fi
+}
 check_if_using_webrsync_gpg() {
     # we have to amend the args to eix if using webrsync-gpg feature
-    if grep -qi "^FEATURES.*webrsync-gpg.*$" <(emerge --info); then
+    read_portage_features_if_necessary
+    if grep -qi "webrsync-gpg" <<<"${PORTAGEFEATURES}"; then
         # force use of emerge-webrsync instead of emerge --sync
         show "Portage feature webrsync-gpg detected: using -w option with eix-sync"
         EIXSYNCARGS="-w"
+    fi
+}
+check_if_using_distcc() {
+    # check for the relevant feature... turn on PUMP prefix if
+    # we find it
+    read_portage_features_if_necessary
+    if grep -qi "distcc-pump" <<<"${PORTAGEFEATURES}"; then
+        # set prefix for emerge in normal situation...
+        show "Portage feature distcc-pump detected: will pump emerge"
+        PUMP="pump"
     fi
 }
 process_command_line_options() {
@@ -533,12 +575,18 @@ process_command_line_options() {
     else
         suppress_alert
     fi
+    # force 'no kernel upgrade' mode if buildkernel USE flag not set
+    if ! "${USE_BUILDKERNEL}"; then
+        ARG_NO_KERNEL_UPGRADE=1
+    fi
+    internal_consistency_option_checks
 }
 
 # *************** start of script proper ***************
 suppress_colour_and_alert_if_output_not_to_a_terminal
 process_command_line_options "${@}"
 check_if_using_webrsync_gpg
+check_if_using_distcc
 display_greeting
 check_gcc_config_and_reset_if_necessary
 update_portage_tree_and_sync_eix

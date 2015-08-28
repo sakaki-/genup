@@ -1,4 +1,4 @@
-.TH GENUP 8 "Version 1.0.8: August 2015"
+.TH GENUP 8 "Version 1.0.9: August 2015"
 .SH NAME
 genup \- update Portage tree, all installed packages, and kernel
 .SH SYNOPSIS
@@ -88,7 +88,7 @@ By default, \fBgenup\fR will:
 a) attempt to perform the update automatically;
 b) attempt to rebuild the kernel (if a new version becomes available);
 c) fail immediately on any error; 
-d) invoke underlying tools (such as \fBbuildkernel\fR(1)) in non-interactive
+d) invoke underlying tools (such as \fBbuildkernel\fR(8)) in non-interactive
 mode; and
 e) not invoke \fBdispatch-conf\fR(1) to resolve clashing configuration file
 updates (unless the \fB--dispatch-conf\fR option has been specified)
@@ -101,7 +101,7 @@ c) fail immediately on any error, \fBexcept\fR when that error occurs during the
 @world update \fBemerge\fR(1) (in which case, prompt whether or not to retry,
 allowing the problem \(em for example, a missing use flag \(em to be fixed in
 a separate terminal);
-d) invoke most underlying tools (such as \fBbuildkernel\fR(1)) in interactive mode; and
+d) invoke most underlying tools (such as \fBbuildkernel\fR(8)) in interactive mode; and
 e) invoke \fBdispatch-conf\fR(1) to resolve clashing configuration file updates.
 
 In both interactive and non-interactive modes, \fBgenup\fR can be instructed
@@ -121,7 +121,7 @@ area). These arguments are \fInot\fR passed to the second invocation, where used
 partition).
 .TP
 .BR \-c ", " \-\-dispatch\-conf
-Always forces \fBdispatch-conf\rR(1) to be run, where necessary, even if
+Always forces \fBdispatch-conf\fR(1) to be run, where necessary, even if
 not in interactive mode.
 .TP
 .BR \-d ", " \-\-deploy\-from\-staging
@@ -176,11 +176,13 @@ It has no effect in interactive mode.
 .BR \-k ", " \-\-keep\-old\-distfiles
 By default, \fBgenup\fR will remove any source tarballs that have previously
 been downloaded by Portage, but which do not relate to the installed version of
-any package. This option inhibits such cleaning.
+any package.
+This option inhibits such cleaning.
 .TP
 .BR \-n ", " \-\-no\-kernel\-upgrade
 Do not perform (in non-interactive mode) or offer to perform (in interactive
-mode) a kernel recompile, even should a newer version be available. 
+mode) a kernel recompile, even should a newer version be available.
+This option is implied if the \fBbuildkernel\fR USE flag is unset.
 
 Note, this does \fBnot\fR itself prevent the update of \fBgentoo-sources\fR (or similar
 package), during the @world \fBemerge\fR(1) step.
@@ -207,6 +209,10 @@ Because of this, \fBgenup\fR will attempt to
 automatically resume any \fBemerge\fR(1) operation with parallel make
 inhibited, should the original operation fail. A warning is issued if this
 happens.
+
+In a similar fashion, if you are using distributed compilation
+with the \fBdistcc\fR and \fBdistcc-pump\fR features, these will be
+automatically inhibited if operations are retried.
 .SH AUTOMATING GENUP
 Should you wish to run \fBgenup\fR automatically, you need to ensure it has
 an appropriate environment.
@@ -221,6 +227,14 @@ export PATH="/usr/local/sbin:/usr/local/bin:"\\
 "/usr/sbin:/usr/bin:/sbin:/bin:/opt/bin"
 genup >/var/log/latest-genup-run.log 2>&1
 .fi
+.SH EFFECT OF USE FLAGS
+If the \fBbuildkernel\fR USE flag is \fIun\fRset when \fBgenup\fR is emerged
+(it is set by default), then in effect the \fB--no-kernel-upgrade\fR option
+is always forced on, and as such
+\fBgenup\fR will never attempt to call
+\fBbuildkernel\fR(8).
+This makes it suitable for use in an embedded context (where there may
+be no EFI system partition etc.).
 .SH COPYRIGHT
 .nf
 Copyright \(co 2014-2015 sakaki
