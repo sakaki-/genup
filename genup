@@ -28,7 +28,7 @@ set -u
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.9"
+VERSION="1.0.10"
 ETCPROFILE="/etc/profile"
 RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS="" ALERT_TEXT=""
 if [[ -v TERM && -n "${TERM}" && "${TERM}" != "dumb" ]]; then
@@ -53,6 +53,7 @@ BUILDKERNELARGS=""
 EIXSYNCARGS=""
 PUMP=""
 NOPUMP="-distcc -distcc-pump"
+PORTAGEINFO=""
 PORTAGEFEATURES=""
 # following should already be in the environment; but to be safe...
 export NUMCPUS=$(grep -E 'processor\s+:' /proc/cpuinfo | wc -l)
@@ -135,14 +136,25 @@ suppress_colour_and_alert_if_output_not_to_a_terminal() {
         suppress_alert
     fi
 }
+read_portage_info_if_necessary() {
+    if [ -z "${PORTAGEINFO}" ]; then
+        show "Checking Portage configuration, please wait..."
+        PORTAGEINFO="$(emerge --info)"
+    fi
+}
 check_gcc_config_and_reset_if_necessary() {
     # check if gcc-config exists with an error - if it does, then
     # attempt to set one based on the current gcc version number
     if ! gcc-config --get-current-profile >/dev/null 2>&1; then
         # unset or invalid, attempt to force this to the current gcc
         # version
-        local GCC_VERSION="$(gcc --version | head -n 1 | sed 's/^.* //')"
-        if gcc-config "${GCC_VERSION}"; then
+        read_portage_info_if_necessary
+        local CHOST="$(grep '^CHOST=.*' <<<"${PORTAGEINFO}")"
+        CHOST="$(cut -d\" -f2 <<< ${CHOST})"
+        local GCC_VERSION="$(eix --installed --exact sys-devel/gcc --format '<installedversions:NAMEVERSION>' --versionsort | tail -n 1)"
+        GCC_VERSION="${GCC_VERSION##*gcc-}"
+        local FULL_GCC_ID="${CHOST}-${GCC_VERSION}"
+        if gcc-config "${FULL_GCC_ID}"; then
             warning "gcc configuration was reset"
             if [ -s "${ETCPROFILE}" ]; then
                 set +e
@@ -485,9 +497,9 @@ internal_consistency_option_checks() {
     fi
 }
 read_portage_features_if_necessary() {
+    read_portage_info_if_necessary
     if [ -z "${PORTAGEFEATURES}" ]; then
-        show "Checking Portage configuration, please wait..."
-        PORTAGEFEATURES=$(grep '^FEATURES.*$' <(emerge --info))
+        PORTAGEFEATURES="$(grep '^FEATURES.*$' <<<"${PORTAGEINFO}")"
     fi
 }
 check_if_using_webrsync_gpg() {
