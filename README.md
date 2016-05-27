@@ -35,6 +35,7 @@ Tool to update the **Portage**(5) tree, all installed packages, and kernel, unde
 (using `buildkernel --copy-from-staging`)
 * updates environment settings (as a precautionary measure)
 (using `env-update`)
+* runs any custom updaters in /etc/genup/updaters.d
 
 The genup utility can be invoked in non-interative (default) or interactive mode (see the  **--ask**  option in the manpage).   Non-interactive  mode  is  suitable  for use in a scripted invocation, for example as part of a nightly **cron**(8) job.
 
