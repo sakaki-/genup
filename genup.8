@@ -1,4 +1,4 @@
-.TH GENUP 8 "Version 1.0.10: November 2015"
+.TH GENUP 8 "Version 1.0.11: May 2016"
 .SH NAME
 genup \- update Portage tree, all installed packages, and kernel
 .SH SYNOPSIS
@@ -75,6 +75,8 @@ deploys new kernel from staging (if desired and available)
 updates environment settings (as a precautionary measure)
 .br
 (using \fBenv-update\fR)
+.IP \(bu 2
+runs any custom updaters in \fI/etc/genup/updaters.d\fR
 .PP
 .RE
 The \fBgenup\fR utility can be invoked in non-interative (default) or 
@@ -123,6 +125,10 @@ partition).
 .BR \-c ", " \-\-dispatch\-conf
 Always forces \fBdispatch-conf\fR(1) to be run, where necessary, even if
 not in interactive mode.
+.TP
+.BR \-C ", " \-\-no\-custom\-updaters
+Do not attempt to run any custom updaters found in
+\fI/etc/genup/updaters.d\fR.
 .TP
 .BR \-d ", " \-\-deploy\-from\-staging
 When a new kernel is available (and, if in interactive mode, you so request)
@@ -235,9 +241,20 @@ is always forced on, and as such
 \fBbuildkernel\fR(8).
 This makes it suitable for use in an embedded context (where there may
 be no EFI system partition etc.).
+.SH EXTENDING GENUP
+At the end of the main process, \fBgenup\fR will attempt to run any executable
+files found in the \fI/etc/genup/updaters.d\fR directory
+(symlinks to executable files are also OK). You can use this facility to add
+your own custom update steps should you need to do so.
+
+Should any such custom updater exit with a non-zero
+exit status, \fBgenup\fR will also exit (immediately) with a failure code.
+
+Note that you can suppress the running of custom updaters, by passing the
+\fB--no-custom-updaters\fR option to \fBgenup\fR.
 .SH COPYRIGHT
 .nf
-Copyright \(co 2014-2015 sakaki
+Copyright \(co 2014-2016 sakaki
 License GPLv3+ (GNU GPL version 3 or later)
 <http://gnu.org/licenses/gpl.html>
 
