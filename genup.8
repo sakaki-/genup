@@ -1,4 +1,4 @@
-.TH GENUP 8 "Version 1.0.11: May 2016"
+.TH GENUP 8 "Version 1.0.12: January 2017"
 .SH NAME
 genup \- update Portage tree, all installed packages, and kernel
 .SH SYNOPSIS
@@ -12,7 +12,8 @@ When invoked, it automatically performs the following steps, in order:
 .br
 .RS
 .IP \(bu 2
-updates Portage tree (and active overlays), and syncs \fBeix\fR(1)
+updates Portage tree & overlays; syncs \fBeix\fR(1)
+(if desired)
 .br
 (using \fBeix-sync\fR)
 .IP \(bu 2
@@ -26,7 +27,7 @@ ensures Portage itself is up-to-date
 .IP \(bu 2
 updates all packages in the @world set
 .br
-(using \fBemerge --deep --with-bdeps=y --newuse --update @world\fR)
+(using \fBemerge --deep --with-bdeps=y --changed-use --update @world\fR)
 .IP \(bu 2
 builds any external modules (such as those for VirtualBox)
 .br
@@ -199,6 +200,18 @@ Do not attempt to run \fBperl-cleaner\fR(1) during the process.
 .BR \-P ", " \-\-no\-python\-updater
 Do not attempt to run \fBpython-updater\fR(1) during the process.
 .TP
+.BR \-r ", " \-\-adjustment\=N
+Specifies the \fBnice\fR(1) adjustment value N (-20<=N<=19) under which
+to run \fBemerge\fR(1) and \fBbuildkernel\fR(8) operations.
+
+If this option is unspecified, the default niceness adjustment value is 19,
+which causes builds to run at the lowest possible
+priority; this is useful to prevent \fBgenup\fR clogging up your
+system. Be careful about using negative values!
+.TP
+.BR \-S ", " \-\-no\-eix\-sync
+Do not attempt to run \fBeix-sync\fR(1) at the start of the process.
+.TP
 .BR \-v ", " \-\-verbose
 Provides more verbose output from invoked tools, where possible.
 .TP
@@ -254,7 +267,7 @@ Note that you can suppress the running of custom updaters, by passing the
 \fB--no-custom-updaters\fR option to \fBgenup\fR.
 .SH COPYRIGHT
 .nf
-Copyright \(co 2014-2016 sakaki
+Copyright \(co 2014-2017 sakaki
 License GPLv3+ (GNU GPL version 3 or later)
 <http://gnu.org/licenses/gpl.html>
 
@@ -269,6 +282,7 @@ sakaki \(em send bug reports or comments to <sakaki@deciban.com>
 .BR emerge (1),
 .BR eix (1),
 .BR emaint (1),
+.BR nice (1),
 .BR make (1),
 .BR perl-cleaner (1),
 .BR python-updater (1),

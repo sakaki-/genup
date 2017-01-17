@@ -5,7 +5,7 @@
 # Will offer to update the kernel, if a new version has become available.
 # Intended to be run interactively.
 #
-# Copyright (c) 2014-2016 sakaki <sakaki@deciban.com>
+# Copyright (c) 2014-2017 sakaki <sakaki@deciban.com>
 #
 # License (GPL v3.0)
 # ------------------
@@ -29,7 +29,7 @@ shopt -s nullglob
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.11"
+VERSION="1.0.12"
 ETCPROFILE="/etc/profile"
 UPDATERSDIR="/etc/${PROGNAME}/updaters.d"
 RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS="" ALERT_TEXT=""
@@ -50,7 +50,9 @@ USE_BUILDKERNEL=true
 VERBOSITYFLAG=""
 ASKFLAG=""
 ALERTFLAG=""
+EMERGE=""
 EMERGEARGS=""
+BUILDKERNEL=""
 BUILDKERNELARGS=""
 EIXSYNCARGS=""
 PUMP=""
@@ -67,8 +69,10 @@ declare -i KERNELBUILT=0 KERNELDEPLOYED=0 NEEDSDISPATCHCONF=0
 declare -i ARG_ASK=0 ARG_DEPLOYFROMSTAGING=0 ARG_HELP=0 ARG_NO_KERNEL_UPGRADE=0
 declare -i ARG_VERBOSE=0 ARG_VERSION=0 ARG_DISPATCHCONF=0
 declare -i ARG_KEEP_OLD_DISTFILES=0
-declare -i ARG_NO_PERL_CLEANER=0 ARG_NO_PYTHON_UPDATER=0 ARG_ALERT=0
+declare -i ARG_NO_PERL_CLEANER=0 ARG_NO_PYTHON_UPDATER=0
+declare -i ARG_NO_EIX_SYNC=0 ARG_ALERT=0
 declare -i ARG_IGNORE_REQUIRED_CHANGES=0 ARG_NO_CUSTOM_UPDATERS=0
+declare -i ADJUSTMENT=19
 
 # ***************** various functions ****************** 
 cleanup_and_exit_with_code() {
@@ -147,6 +151,7 @@ read_portage_info_if_necessary() {
 check_gcc_config_and_reset_if_necessary() {
     # check if gcc-config exists with an error - if it does, then
     # attempt to set one based on the current gcc version number
+    # see https://wiki.gentoo.org/wiki/Upgrading_GCC
     if ! gcc-config --get-current-profile >/dev/null 2>&1; then
         # unset or invalid, attempt to force this to the current gcc
         # version
@@ -158,6 +163,7 @@ check_gcc_config_and_reset_if_necessary() {
         local FULL_GCC_ID="${CHOST}-${GCC_VERSION}"
         if gcc-config "${FULL_GCC_ID}"; then
             warning "gcc configuration was reset"
+            env-update
             if [ -s "${ETCPROFILE}" ]; then
                 set +e
                 set +u
@@ -165,6 +171,7 @@ check_gcc_config_and_reset_if_necessary() {
                 set -e
                 set -u
             fi
+            ${EMERGE} ${VERBOSITYFLAG} --oneshot sys-devel/libtool
         else
             die "failed to set gcc configuration"
         fi
@@ -174,10 +181,14 @@ display_greeting() {
     show "Gentoo System Updater v${VERSION}"
 }
 update_portage_tree_and_sync_eix() {
-    show "Updating Portage tree and syncing the eix cache"
-    show "(this may take some time)..."
-    # do this quietly, to avoid flooding the logs / screen
-    eix-sync -q ${EIXSYNCARGS}
+    if ((ARG_NO_EIX_SYNC==0)); then
+        show "Updating Portage tree and syncing the eix cache"
+        show "(this may take some time)..."
+        # do this quietly, to avoid flooding the logs / screen
+        eix-sync -q ${EIXSYNCARGS}
+    else
+        warning "As requested, not performing eix-sync"
+    fi
 }
 remove_any_prior_emerge_resume_history() {
     # as if we call emerge --resume later, we don't want any hangovers from the
@@ -187,7 +198,7 @@ remove_any_prior_emerge_resume_history() {
 }
 ensure_portage_itself_is_up_to_date() {
     show "Bringing Portage itself up to date..."
-    emerge ${VERBOSITYFLAG} --oneshot --update portage
+    ${EMERGE} ${VERBOSITYFLAG} --oneshot --update portage
 }
 update_all_packages_in_world_set_and_dependencies() {
     # performs deep dependency tree update, including build-time dependencies
@@ -201,17 +212,17 @@ update_all_packages_in_world_set_and_dependencies() {
         # looks possible; you can set the --ignore-required-changes option to
         # suppress this test
         if grep -qi "The following \(keyword\|mask\|USE\|license\) changes are necessary to proceed" \
-            <(emerge ${VERBOSITYFLAG} ${EMERGEARGS} --pretend --deep \
-            --with-bdeps=y --newuse --update --backtrack=50 @world 2>&1 || true); then
+            <(${EMERGE} ${VERBOSITYFLAG} ${EMERGEARGS} --pretend --deep \
+            --with-bdeps=y --changed-use --update --backtrack=50 @world 2>&1 || true); then
             # silently note this fact, then fail later
             USER_CHANGES_REQUIRED=1
         fi
     fi
-    if ! ${PUMP} emerge ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} ${EMERGEARGS} --deep \
-        --with-bdeps=y --newuse --update --backtrack=50 @world; then
+    if ! ${PUMP} ${EMERGE} ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} ${EMERGEARGS} --deep \
+        --with-bdeps=y --changed-use --update --backtrack=50 @world; then
         # per make manpage, if multiple "j" opts are specified, the last
         # one takes precedence, so this is legitimate
-        if MAKEOPTS="${MAKEOPTS-} -j1" FEATURES="${NOPUMP}" emerge --resume; then
+        if MAKEOPTS="${MAKEOPTS-} -j1" FEATURES="${NOPUMP}" ${EMERGE} --resume; then
             warning "emerge completed successfully, but only by restricting"
             warning "build parallelism and distcc"
         else
@@ -222,7 +233,7 @@ update_all_packages_in_world_set_and_dependencies() {
                 show "You can try to fix the problem in another console, then return here"
                 show "and resume the emerge"
                 continue_yn "Attempt to resume the emerge now"
-                MAKEOPTS="${MAKEOPTS-} -j1" emerge --resume
+                MAKEOPTS="${MAKEOPTS-} -j1" ${EMERGE} --resume
             else
                 die "Failed to complete the emerge due to error"
             fi
@@ -239,8 +250,8 @@ update_all_packages_in_world_set_and_dependencies() {
 }
 rebuild_external_modules_if_necessary() {
     show "Creating any necessary external modules (e.g., VirtualBox)..."
-    if ! ${PUMP} emerge ${VERBOSITYFLAG} @module-rebuild; then
-        if MAKEOPTS="${MAKEOPTS-} -j1" FEATURES="${NOPUMP}" emerge --resume; then
+    if ! ${PUMP} ${EMERGE} ${VERBOSITYFLAG} @module-rebuild; then
+        if MAKEOPTS="${MAKEOPTS-} -j1" FEATURES="${NOPUMP}" ${EMERGE} --resume; then
             warning "emerge @module-rebuild completed successfully, but only by restricting"
             warning "build parallelism and distcc"
         else
@@ -257,8 +268,8 @@ rebuild_packages_depending_on_stale_libraries() {
     # the below emerge will rebuild any such consumers, so that the old
     # library may be freed
     show "Rebuilding any consumers of old shared libraries, which did not autoupdate..."
-    if ! ${PUMP} emerge ${VERBOSITYFLAG} @preserved-rebuild; then
-        if MAKEOPTS="${MAKEOPTS-} -j1" FEATURES="${NOPUMP}" emerge --resume; then
+    if ! ${PUMP} ${EMERGE} ${VERBOSITYFLAG} @preserved-rebuild; then
+        if MAKEOPTS="${MAKEOPTS-} -j1" FEATURES="${NOPUMP}" ${EMERGE} --resume; then
             warning "emerge @preserved-rebuild completed successfully, but only by restricting"
             warning "build parallelism and distcc"
         else
@@ -348,7 +359,7 @@ offer_kernel_upgrade_to_staging_if_available() {
             show "Entering buildkernel..."
             # following does not require your USB key to be inserted, as it
             # only builds to staging in /boot...
-            buildkernel ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} ${BUILDKERNELARGS} --stage-only
+            ${BUILDKERNEL} ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} ${BUILDKERNELARGS} --stage-only
             KERNELBUILT=1
         else
             show "OK, leaving your kernel as is, to upgrade subsequently, issue:"
@@ -399,7 +410,7 @@ remove_unreferenced_packages() {
     # following should be reasonably safe, it removes any packages that are not
     # required by the transitive closure of @world set dependencies
     show "Removing packages not required by @world set..."
-    emerge ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} --depclean
+    ${EMERGE} ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} --depclean
     # we may have just blown away our old version of gcc, but not enabled
     # the replacement version's config, so...
     check_gcc_config_and_reset_if_necessary
@@ -485,7 +496,11 @@ Options:
                         buildkernel USE flag has not been set)
   -p, --no-perl-cleaner do not attempt to run perl-cleaner
   -P, --no-python-updater
-                        do not attept to run python-updater
+                        do not attempt to run python-updater
+  -r, --adjustment=N    add integer N to the build niceness -20<=N<=19
+                        (the default is 19, running builds at lowest possible
+                        system priority to avoid slowing the system too much)
+  -S, --no-eix-sync     do not attempt to run eix-sync
   -v, --verbose         ask called programs to display more information
   -V, --version         display the version number of ${PROGNAME} and exit
 EOF
@@ -520,6 +535,9 @@ internal_consistency_option_checks() {
             display_usage_message_and_bail_out "cannot specify --deploy-from-staging with ${KERNMSG}"
         fi
     fi
+    if ((ADJUSTMENT<-20 || ADJUSTMENT>19)); then
+            display_usage_message_and_bail_out "must have -20 <= build niceness adjustment <= 19"
+    fi
 }
 read_portage_features_if_necessary() {
     read_portage_info_if_necessary
@@ -543,7 +561,7 @@ check_if_using_distcc() {
     if grep -qi "distcc-pump" <<<"${PORTAGEFEATURES}"; then
         # set prefix for emerge in normal situation...
         show "Portage feature distcc-pump detected: will pump emerge"
-        PUMP="pump"
+        PUMP="" # no need for this, will work automatically
     fi
 }
 process_command_line_options() {
@@ -551,7 +569,7 @@ process_command_line_options() {
     declare -i RC
     set +e
         # error trapping off, as we want to handle errors
-        TEMP="$(getopt -o aAb:cCde:hiknpPvV --long ask,alert,buildkernel-args:,dispatch-conf,no-custom-updaters,deploy-from-staging,emerge-args:,help,ignore-required-changes,keep-old-distfiles,no-kernel-upgrade,no-perl-cleaner,no-python-updater,verbose,version -n "${PROGNAME}" -- "${@}")"
+        TEMP="$(getopt -o aAb:cCde:hiknpPr:SvV --long ask,alert,buildkernel-args:,dispatch-conf,no-custom-updaters,deploy-from-staging,emerge-args:,help,ignore-required-changes,keep-old-distfiles,no-kernel-upgrade,no-perl-cleaner,no-python-updater,adjustment:,no-eix-sync,verbose,version -n "${PROGNAME}" -- "${@}")"
         RC="${?}"
     set -e
     if ((RC!=0)); then
@@ -583,6 +601,12 @@ process_command_line_options() {
             -n|--no-kernel-upgrade) ARG_NO_KERNEL_UPGRADE=1 ; shift ;;
             -p|--no-perl-cleaner) ARG_NO_PERL_CLEANER=1 ; shift ;;
             -P|--no-python-updater) ARG_NO_PYTHON_UPDATER=1 ; shift ;;
+            -r|--adjustment)
+                case "${2}" in
+                    "") shift 2 ;;
+                    *) ADJUSTMENT="${2}" ; shift 2 ;;
+                esac ;;
+            -S|--no-eix-sync) ARG_NO_EIX_SYNC=1 ; shift ;;
             -v|--verbose) ARG_VERBOSE=1 ; shift ;;
             -V|--version) ARG_VERSION=1 ; shift ;;
             --) shift ; break ;;
@@ -597,6 +621,9 @@ process_command_line_options() {
         print_version
         cleanup_and_exit_with_code 0
     fi
+    # setup emerge, buildkernel commands with specified niceness
+    EMERGE="nice -n ${ADJUSTMENT} emerge"
+    BUILDKERNEL="nice -n ${ADJUSTMENT} buildkernel"
     # set verbosity
     if ((ARG_VERBOSE==1)); then
         VERBOSITY+=1
