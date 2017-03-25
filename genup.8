@@ -1,4 +1,4 @@
-.TH GENUP 8 "Version 1.0.12: January 2017"
+.TH GENUP 8 "Version 1.0.13: March 2017"
 .SH NAME
 genup \- update Portage tree, all installed packages, and kernel
 .SH SYNOPSIS
@@ -15,7 +15,7 @@ When invoked, it automatically performs the following steps, in order:
 updates Portage tree & overlays; syncs \fBeix\fR(1)
 (if desired)
 .br
-(using \fBeix-sync\fR)
+(using (if needed) \fBemaint sync --auto\fR, and \fBeix-sync\fR)
 .IP \(bu 2
 removes any prior \fBemerge\fR(1) resume history;
 .br
@@ -265,6 +265,21 @@ exit status, \fBgenup\fR will also exit (immediately) with a failure code.
 
 Note that you can suppress the running of custom updaters, by passing the
 \fB--no-custom-updaters\fR option to \fBgenup\fR.
+.SH USE WITH WEBRSYNC-GPG
+If you have the webrsync-gpg FEATURE enabled in \fI/etc/portage/make.conf\fR,
+\fBgenup\fR will select the -w option when calling \fBeix-sync\fR.
+Since, in this
+mode, \fBeix-sync\fR does not automatically sync (non-layman) overlays,
+\fBgenup\fR will
+call \fBemaint sync --auto\fR to do this for you, before \fBeix-sync\fR.
+
+As such, you must make sure you have set "auto-sync = no" in
+\fI/etc/portage/repos.conf/gentoo.conf\fR when using the webrsync-gpg FEATURE,
+to prevent \fBemaint sync --auto\fR from also updating the main gentoo repo
+using rsync (which will almost certainly not be what you want).
+
+NB: most users will \fBnot\fR have the webrsync-gpg FEATURE set, and so should ignore
+this note.
 .SH COPYRIGHT
 .nf
 Copyright \(co 2014-2017 sakaki
