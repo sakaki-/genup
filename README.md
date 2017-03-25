@@ -4,7 +4,7 @@ Tool to update the **Portage**(5) tree, all installed packages, and kernel, unde
 ## Description
 **genup** is  a  utility  intended  to  simplify the process of keeping your Gentoo system up to date.  When invoked, it automatically performs the following steps, in order:
 * updates Portage tree (and active overlays), and syncs **eix**(1)
-(using `eix-sync`)
+(using `emaint sync` / `eix-sync`)
 * removes any prior **emerge**(1) resume history
 (using `emaint --fix cleanresume`)
 * ensures **Portage**(5) itself is up-to-date
