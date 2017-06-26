@@ -29,7 +29,7 @@ shopt -s nullglob
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.13"
+VERSION="1.0.14"
 ETCPROFILE="/etc/profile"
 UPDATERSDIR="/etc/${PROGNAME}/updaters.d"
 RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS="" ALERT_TEXT=""
@@ -197,8 +197,9 @@ update_portage_tree_and_sync_eix() {
         fi
         show "Updating Portage tree and syncing the eix cache"
         show "(this may take some time)..."
-        # do this quietly, to avoid flooding the logs / screen
-        eix-sync -q ${EIXSYNCARGS}
+        # no longer explicitly set -q
+        # (user can still do so via --eix-sync-args)
+        eix-sync ${EIXSYNCARGS}
     else
         warning "As requested, not performing eix-sync"
         if ((WEBRSYNC==1)); then
@@ -266,7 +267,12 @@ update_all_packages_in_world_set_and_dependencies() {
 }
 rebuild_external_modules_if_necessary() {
     show "Creating any necessary external modules (e.g., VirtualBox)..."
-    if ! ${PUMP} ${EMERGE} ${VERBOSITYFLAG} @module-rebuild; then
+    # exclude packages ending in '-bin'... by convention, these are binary
+    # packages which means they aren't going to rebuild anything
+    # (and may even be binary kernel packages, swept up into the
+    # @module-rebuild set as they 'own' kernel modules in
+    # /lib/modules/<release>/...)
+    if ! ${PUMP} ${EMERGE} ${VERBOSITYFLAG} @module-rebuild --exclude '*-bin'; then
         if MAKEOPTS="${MAKEOPTS-} -j1" FEATURES="${NOPUMP}" ${EMERGE} --resume; then
             warning "emerge @module-rebuild completed successfully, but only by restricting"
             warning "build parallelism and distcc"
@@ -519,6 +525,9 @@ Options:
   -S, --no-eix-sync     do not attempt to run emaint sync --auto or eix-sync
   -v, --verbose         ask called programs to display more information
   -V, --version         display the version number of ${PROGNAME} and exit
+  -x, --eix-sync-args=ARGS
+                        pass provided additional ARGS to eix-sync
+                        (e.g. use --eix-sync-args="-q" to suppress output)
 EOF
 }
 print_help() {
@@ -567,7 +576,7 @@ check_if_using_webrsync_gpg() {
     if grep -qi "webrsync-gpg" <<<"${PORTAGEFEATURES}"; then
         # force use of emerge-webrsync instead of emerge --sync
         show "Portage feature webrsync-gpg detected: using -w option with eix-sync"
-        EIXSYNCARGS="-w"
+        EIXSYNCARGS="-w ${EIXSYNCARGS}"
 	    WEBRSYNC=1
     fi
 }
@@ -586,7 +595,7 @@ process_command_line_options() {
     declare -i RC
     set +e
         # error trapping off, as we want to handle errors
-        TEMP="$(getopt -o aAb:cCde:hiknpPr:SvV --long ask,alert,buildkernel-args:,dispatch-conf,no-custom-updaters,deploy-from-staging,emerge-args:,help,ignore-required-changes,keep-old-distfiles,no-kernel-upgrade,no-perl-cleaner,no-python-updater,adjustment:,no-eix-sync,verbose,version -n "${PROGNAME}" -- "${@}")"
+        TEMP="$(getopt -o aAb:cCde:hiknpPr:SvVx: --long ask,alert,buildkernel-args:,dispatch-conf,no-custom-updaters,deploy-from-staging,emerge-args:,help,ignore-required-changes,keep-old-distfiles,no-kernel-upgrade,no-perl-cleaner,no-python-updater,adjustment:,no-eix-sync,verbose,version,eix-sync-args: -n "${PROGNAME}" -- "${@}")"
         RC="${?}"
     set -e
     if ((RC!=0)); then
@@ -626,6 +635,11 @@ process_command_line_options() {
             -S|--no-eix-sync) ARG_NO_EIX_SYNC=1 ; shift ;;
             -v|--verbose) ARG_VERBOSE=1 ; shift ;;
             -V|--version) ARG_VERSION=1 ; shift ;;
+            -x|--eix-sync-args)
+                case "${2}" in
+                    "") shift 2 ;;
+                    *) EIXSYNCARGS="${2}" ; shift 2 ;;
+                esac ;;
             --) shift ; break ;;
             *) die "Internal error!" ;;
         esac

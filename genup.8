@@ -1,4 +1,4 @@
-.TH GENUP 8 "Version 1.0.13: March 2017"
+.TH GENUP 8 "Version 1.0.14: June 2017"
 .SH NAME
 genup \- update Portage tree, all installed packages, and kernel
 .SH SYNOPSIS
@@ -31,7 +31,7 @@ updates all packages in the @world set
 .IP \(bu 2
 builds any external modules (such as those for VirtualBox)
 .br
-(using \fBemerge @module-rebuild\fR)
+(using \fBemerge @module-rebuild --exclude '*-bin'\fR)
 .IP \(bu 2
 rebuilds any packages depending on stale libraries
 .br
@@ -217,6 +217,17 @@ Provides more verbose output from invoked tools, where possible.
 .TP
 .BR \-V ", " \-\-version
 Displays the version number of \fBgenup\fR, and exits.
+
+.TP
+.BR \-x ", " \-\-eix\-sync\-args\=ADDITIONAL_ARGS
+Passes the specified arguments to the main
+.BR eix-sync (1)
+invocation. One possible use here is to specify:
+.br
+\fB--eix-sync-args="-q"\fR
+
+This instructs \fBeix-sync\fR(1) to suppress its otherwise verbose output
+(which was the default behaviour of \fBgenup\fR prior to version 1.0.14).
 .SH EXIT STATUS
 The exit status is 0 if the update completed successfully, and 1 otherwise.
 .SH PARALLEL MAKE
@@ -296,6 +307,7 @@ sakaki \(em send bug reports or comments to <sakaki@deciban.com>
 .BR eclean (1),
 .BR emerge (1),
 .BR eix (1),
+.BR eix-sync (1),
 .BR emaint (1),
 .BR nice (1),
 .BR make (1),
