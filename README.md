@@ -12,7 +12,7 @@ Tool to update the **Portage**(5) tree, all installed packages, and kernel, unde
 * updates all packages in the @world set
 (using `emerge --deep --with-bdeps=y --newuse --update @world`)
 * rebuilds any external modules (such as those for VirtualBox)
-(using `emerge @module-rebuild`)
+(using `emerge @module-rebuild --exclude '*-bin'`)
 * rebuilds any packages depending on stale libraries
 (using `emerge @preserved-rebuild`)
 * updates any old perl(1) modules
