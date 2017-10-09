@@ -10,7 +10,7 @@ Tool to update the **Portage**(5) tree, all installed packages, and kernel, unde
 * ensures **Portage**(5) itself is up-to-date
 (using `emerge --oneshot --update portage`)
 * updates all packages in the @world set
-(using `emerge --deep --with-bdeps=y --newuse --update @world`)
+(using `emerge --deep --with-bdeps=y --changed-use --update @world`)
 * rebuilds any external modules (such as those for VirtualBox)
 (using `emerge @module-rebuild --exclude '*-bin'`)
 * rebuilds any packages depending on stale libraries
