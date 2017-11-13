@@ -17,8 +17,6 @@ Tool to update the **Portage**(5) tree, all installed packages, and kernel, unde
 (using `emerge @preserved-rebuild`)
 * updates any old perl(1) modules
 (using `perl-cleaner --all`)
-* updates any old python(1) modules
-(using `python-updater`)
 * resolves clashing config file changes (in interactive mode)
 (using `dispatch-conf`)
 * upgrades the kernel if possible (to staging, in _/boot_)

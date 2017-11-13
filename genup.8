@@ -1,4 +1,4 @@
-.TH GENUP 8 "Version 1.0.14: June 2017"
+.TH GENUP 8 "Version 1.0.15: November 2017"
 .SH NAME
 genup \- update Portage tree, all installed packages, and kernel
 .SH SYNOPSIS
@@ -40,10 +40,6 @@ rebuilds any packages depending on stale libraries
 updates any old \fBperl\fR(1) modules (if desired)
 .br
 (using \fBperl-cleaner --all\fR)
-.IP \(bu 2
-updates any old \fBpython\fR(1) modules (if desired)
-.br
-(using \fBpython-updater\fR)
 .IP \(bu 2
 resolves clashing config file changes (in interactive mode)
 .br
@@ -197,9 +193,6 @@ package), during the @world \fBemerge\fR(1) step.
 .BR \-p ", " \-\-no\-perl\-cleaner
 Do not attempt to run \fBperl-cleaner\fR(1) during the process.
 .TP
-.BR \-P ", " \-\-no\-python\-updater
-Do not attempt to run \fBpython-updater\fR(1) during the process.
-.TP
 .BR \-r ", " \-\-adjustment\=N
 Specifies the \fBnice\fR(1) adjustment value N (-20<=N<=19) under which
 to run \fBemerge\fR(1) and \fBbuildkernel\fR(8) operations.
@@ -312,7 +305,6 @@ sakaki \(em send bug reports or comments to <sakaki@deciban.com>
 .BR nice (1),
 .BR make (1),
 .BR perl-cleaner (1),
-.BR python-updater (1),
 .BR buildkernel (8),
 .BR revdep-rebuild (1),
 .BR cron (8),
