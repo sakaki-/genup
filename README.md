@@ -9,8 +9,12 @@ Tool to update the **Portage**(5) tree, all installed packages, and kernel, unde
 (using `emaint --fix cleanresume`)
 * ensures **Portage**(5) itself is up-to-date
 (using `emerge --oneshot --update portage`)
+* ensures **genup** itself is up-to-date (restarting if not)
+(using `emerge --oneshot --update genup`)
 * updates all packages in the @world set
 (using `emerge --deep --with-bdeps=y --changed-use --update @world`)
+* removes unreferenced packages
+(using `emerge --depclean`)
 * rebuilds any external modules (such as those for VirtualBox)
 (using `emerge @module-rebuild --exclude '*-bin'`)
 * rebuilds any packages depending on stale libraries
@@ -21,7 +25,7 @@ Tool to update the **Portage**(5) tree, all installed packages, and kernel, unde
 (using `dispatch-conf`)
 * upgrades the kernel if possible (to staging, in _/boot_)
 (using `buildkernel --stage-only`)
-* removes unreferenced packages
+* removes unreferenced packages (again)
 (using `emerge --depclean`)
 * fixes missing shared library dependencies
 (using `revdep-rebuild`)
