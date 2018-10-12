@@ -1,4 +1,4 @@
-.TH GENUP 8 "Version 1.0.17: September 2018"
+.TH GENUP 8 "Version 1.0.18: October 2018"
 .SH NAME
 genup \- update Portage tree, all installed packages, and kernel
 .SH SYNOPSIS
@@ -25,9 +25,17 @@ ensures Portage itself is up-to-date
 .br
 (using \fBemerge --oneshot --update portage\fR)
 .IP \(bu 2
+ensures genup itself is up-to-date (restarting if not)
+.br
+(using \fBemerge --oneshot --update genup\fR)
+.IP \(bu 2
 updates all packages in the @world set
 .br
 (using \fBemerge --deep --with-bdeps=y --changed-use --update @world\fR)
+.IP \(bu 2
+removes unreferenced packages
+.br
+(using \fBemerge --depclean\fR)
 .IP \(bu 2
 builds any external modules (such as those for VirtualBox)
 .br
@@ -49,7 +57,7 @@ upgrades the kernel if possible (to staging, in \fI/boot\fR)
 .br
 (using \fBbuildkernel --stage-only\fR)
 .IP \(bu 2
-removes unreferenced packages
+removes unreferenced packages (again)
 .br
 (using \fBemerge --depclean\fR)
 .IP \(bu 2

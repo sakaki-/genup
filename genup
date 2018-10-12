@@ -29,7 +29,7 @@ shopt -s nullglob
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.17"
+VERSION="1.0.18"
 ETCPROFILE="/etc/profile"
 UPDATERSDIR="/etc/${PROGNAME}/updaters.d"
 RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS="" ALERT_TEXT=""
@@ -87,6 +87,9 @@ declare -i ADJUSTMENT=19
 if ! tty -s; then
     export TERM="dumb"
 fi
+# store copy of original args, and canonical path to genup itself
+ORIGINAL_ARGS="${@}"
+SCRIPTPATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 
 # ***************** various functions ****************** 
 cleanup_and_exit_with_code() {
@@ -228,8 +231,21 @@ remove_any_prior_emerge_resume_history() {
 }
 ensure_portage_itself_is_up_to_date() {
     show "Bringing Portage itself up to date..."
-    ${EMERGE} ${VERBOSITYFLAG} --oneshot --update portage
+    ${EMERGE} ${VERBOSITYFLAG} --oneshot --update sys-apps/portage
 }
+
+ensure_genup_itself_is_up_to_date() {
+    show "Bringing genup itself up to date..."
+    ${EMERGE} ${VERBOSITYFLAG} --oneshot --update app-portage/genup
+    # if the above caused the version of genup to change, exec ourselves
+    # for a full restart
+    if [[ $("${SCRIPTPATH}" --version) != ${VERSION} ]]; then
+        warning "The version of genup has changed!"
+        warning "Restarting genup process..."
+        exec "${SCRIPTPATH}" "${ORIGINAL_ARGS}"
+    fi
+}
+
 update_all_packages_in_world_set_and_dependencies() {
     # performs deep dependency tree update, including build-time dependencies
     # will update any package whose use flags have changed
@@ -690,7 +706,9 @@ check_gcc_config_and_reset_if_necessary
 update_portage_tree_and_sync_eix
 remove_any_prior_emerge_resume_history
 ensure_portage_itself_is_up_to_date
+ensure_genup_itself_is_up_to_date
 update_all_packages_in_world_set_and_dependencies
+remove_unreferenced_packages
 rebuild_external_modules_if_necessary
 rebuild_packages_depending_on_stale_libraries
 bring_old_perl_modules_up_to_date
