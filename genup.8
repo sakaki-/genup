@@ -1,4 +1,4 @@
-.TH GENUP 8 "Version 1.0.18: October 2018"
+.TH GENUP 8 "Version 1.0.19: March 2019"
 .SH NAME
 genup \- update Portage tree, all installed packages, and kernel
 .SH SYNOPSIS
@@ -48,6 +48,10 @@ rebuilds any packages depending on stale libraries
 updates any old \fBperl\fR(1) modules (if desired)
 .br
 (using \fBperl-cleaner --all\fR)
+.IP \(bu 2
+removes stale versions of \fBpython\fR(1) from eselect list
+.br
+(using \fBeselect python cleanup\fR)
 .IP \(bu 2
 resolves clashing config file changes (in interactive mode)
 .br
@@ -312,6 +316,7 @@ sakaki \(em send bug reports or comments to <sakaki@deciban.com>
 .BR emaint (1),
 .BR nice (1),
 .BR make (1),
+.BR python (1),
 .BR perl-cleaner (1),
 .BR buildkernel (8),
 .BR revdep-rebuild (1),
