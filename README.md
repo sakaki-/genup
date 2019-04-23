@@ -12,14 +12,14 @@ Tool to update the **Portage**(5) tree, all installed packages, and kernel, unde
 * ensures **genup** itself is up-to-date (restarting if not)
 (using `emerge --oneshot --update genup`)
 * updates all packages in the @world set
-(first using `emtee`, if the matching USE flag is set, and then using `emerge --deep --with-bdeps=y --changed-use --update @world`)
+(first using **emtee**(1), if the matching USE flag is set, and then using `emerge --deep --with-bdeps=y --changed-use --update @world`)
 * removes unreferenced packages
 (using `emerge --depclean`)
 * rebuilds any external modules (such as those for VirtualBox)
 (using `emerge @module-rebuild --exclude '*-bin'`)
 * rebuilds any packages depending on stale libraries
 (using `emerge @preserved-rebuild`)
-* updates any old perl(1) modules
+* updates any old **perl(1)** modules
 (using `perl-cleaner --all`)
 * resolves clashing config file changes (in interactive mode)
 (using `dispatch-conf`)
