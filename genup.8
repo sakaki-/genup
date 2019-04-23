@@ -1,4 +1,4 @@
-.TH GENUP 8 "Version 1.0.19: March 2019"
+.TH GENUP 8 "Version 1.0.20: April 2019"
 .SH NAME
 genup \- update Portage tree, all installed packages, and kernel
 .SH SYNOPSIS
@@ -31,7 +31,7 @@ ensures genup itself is up-to-date (restarting if not)
 .IP \(bu 2
 updates all packages in the @world set
 .br
-(using \fBemerge --deep --with-bdeps=y --changed-use --update @world\fR)
+(first using \fBemtee\fR, if the matching USE flag is set, and then using \fBemerge --deep --with-bdeps=y --changed-use --update @world\fR)
 .IP \(bu 2
 removes unreferenced packages
 .br
@@ -173,6 +173,10 @@ the \fBdispatch-conf\fR(1) mechanism).
 Note also that if you do use this approach, you should also specify
 the \fB--ignore-required-changes\fR option.
 .TP
+.BR \-E ", " \-\-no\-emtee
+Do not attempt to use the \fBemtee\fR(1) tool, even when the
+eponymous USE flag has been enabled.
+.TP
 .BR \-h ", " \-\-help
 Displays a short help screen, and exits.
 .TP
@@ -270,6 +274,15 @@ is always forced on, and as such
 \fBbuildkernel\fR(8).
 This makes it suitable for use in an embedded context (where there may
 be no EFI system partition etc.).
+
+If the \fBemtee\fR USE flag is set when \fBgenup\fR is emerged
+(it is \fIun\fRset by default), then the \fB@world\fR update will first be
+attempted using the (often, more efficient) \fBemtee\fR tool. This behaviour
+may always be suppressed by using the \fB--no-emtee\fR option. Note that even when
+\fBemtee\fR \fIis\fR used, and even when it returns successfully, a regular
+\fB@world\fR  \fBemerge\fR will always still be attempted immediately afterwards
+(nomally a relatively rapid no-op, this behaviour ensures all corner cases are
+resoved correctly).
 .SH EXTENDING GENUP
 At the end of the main process, \fBgenup\fR will attempt to run any executable
 files found in the \fI/etc/genup/updaters.d\fR directory
@@ -298,7 +311,7 @@ NB: most users will \fBnot\fR have the webrsync-gpg FEATURE set, and so should i
 this note.
 .SH COPYRIGHT
 .nf
-Copyright \(co 2014-2018 sakaki
+Copyright \(co 2014-2019 sakaki
 License GPLv3+ (GNU GPL version 3 or later)
 <http://gnu.org/licenses/gpl.html>
 
@@ -311,6 +324,7 @@ sakaki \(em send bug reports or comments to <sakaki@deciban.com>
 .BR dispatch-conf (1),
 .BR eclean (1),
 .BR emerge (1),
+.BR emtee (1),
 .BR eix (1),
 .BR eix-sync (1),
 .BR emaint (1),

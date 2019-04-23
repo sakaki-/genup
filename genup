@@ -29,7 +29,7 @@ shopt -s nullglob
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.19"
+VERSION="1.0.20"
 ETCPROFILE="/etc/profile"
 UPDATERSDIR="/etc/${PROGNAME}/updaters.d"
 RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS="" ALERT_TEXT=""
@@ -47,6 +47,9 @@ SHOWSUFFIX=""
 # following variable is conformed on installation by ebuild
 # (to reflect setting of "buildkernel" USE flag)
 USE_BUILDKERNEL=true
+# following variable is conformed on installation by ebuild
+# (to reflect setting of "emtee" USE flag)
+USE_EMTEE=false
 VERBOSITYFLAG=""
 ASKFLAG=""
 ALERTFLAG=""
@@ -243,6 +246,25 @@ ensure_genup_itself_is_up_to_date() {
         warning "The version of genup has changed!"
         warning "Restarting genup process..."
         exec "${SCRIPTPATH}" "${ORIGINAL_ARGS}"
+    fi
+}
+
+try_emtee_update_if_enabled() {
+    # if the emtee USE flag is enabled, then try doing an initial
+    # @world update with this tool; it is considerably less
+    # resource intensive in some update situations (and can
+    # also sometimes compute a successful update in cases where
+    # a vanilla emerge -DuU --with-bdeps=y @world fails)
+    if "${USE_EMTEE}"; then
+        # this is allowed to fail, since we'll try a full @world
+        # emerge afterwards anyhow
+        show "Attempting to update @world set (for new versions, or changed use flags)"
+        show "using emtee..."
+        if ${PUMP} emtee ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} --emerge-args="${EMERGEARGS}"; then
+            show "emtee run completed successfully!"
+        else
+            warning "emtee @world build did not complete successfully!"
+        fi
     fi
 }
 
@@ -530,6 +552,8 @@ Options:
                         pass provided additional ARGS to the main emerge
                         e.g., use --emerge-args='--autounmask-write' to
                         automatically make necessary changes to config files
+  -E, --no-emtee        don't attempt to use the emtee tool, even when the
+                        eponymous USE flag has been enabled
   -h, --help            show this help message and exit
   -i, --ignore-required-changes
                         don't exit with an error in the event that user-driven
@@ -618,7 +642,7 @@ process_command_line_options() {
     declare -i RC
     set +e
         # error trapping off, as we want to handle errors
-        TEMP="$(getopt -o aAb:cCde:hiknpr:SvVx: --long ask,alert,buildkernel-args:,dispatch-conf,no-custom-updaters,deploy-from-staging,emerge-args:,help,ignore-required-changes,keep-old-distfiles,no-kernel-upgrade,no-perl-cleaner,adjustment:,no-eix-sync,verbose,version,eix-sync-args: -n "${PROGNAME}" -- "${@}")"
+        TEMP="$(getopt -o aAb:cCde:Ehiknpr:SvVx: --long ask,alert,buildkernel-args:,dispatch-conf,no-custom-updaters,deploy-from-staging,emerge-args:,no-emtee,help,ignore-required-changes,keep-old-distfiles,no-kernel-upgrade,no-perl-cleaner,adjustment:,no-eix-sync,verbose,version,eix-sync-args: -n "${PROGNAME}" -- "${@}")"
         RC="${?}"
     set -e
     if ((RC!=0)); then
@@ -644,6 +668,7 @@ process_command_line_options() {
                     "") shift 2 ;;
                     *) EMERGEARGS="${2}" ; shift 2 ;;
                 esac ;;
+            -E|--no-emtee) USE_EMTEE=false ; shift ;;
             -h|--help) ARG_HELP=1 ; shift ;;
             -i|--ignore-required-changes) ARG_IGNORE_REQUIRED_CHANGES=1 ; shift ;;
             -k|--keep-old-distfiles) ARG_KEEP_OLD_DISTFILES=1 ; shift ;;
@@ -711,6 +736,7 @@ update_portage_tree_and_sync_eix
 remove_any_prior_emerge_resume_history
 ensure_portage_itself_is_up_to_date
 ensure_genup_itself_is_up_to_date
+try_emtee_update_if_enabled
 update_all_packages_in_world_set_and_dependencies
 remove_unreferenced_packages
 rebuild_external_modules_if_necessary

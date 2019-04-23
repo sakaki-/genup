@@ -12,7 +12,7 @@ Tool to update the **Portage**(5) tree, all installed packages, and kernel, unde
 * ensures **genup** itself is up-to-date (restarting if not)
 (using `emerge --oneshot --update genup`)
 * updates all packages in the @world set
-(using `emerge --deep --with-bdeps=y --changed-use --update @world`)
+(first using `emtee`, if the matching USE flag is set, and then using `emerge --deep --with-bdeps=y --changed-use --update @world`)
 * removes unreferenced packages
 (using `emerge --depclean`)
 * rebuilds any external modules (such as those for VirtualBox)
