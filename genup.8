@@ -1,4 +1,4 @@
-.TH GENUP 8 "Version 1.0.20: April 2019"
+.TH GENUP 8 "Version 1.0.21: April 2019"
 .SH NAME
 genup \- update Portage tree, all installed packages, and kernel
 .SH SYNOPSIS
@@ -84,6 +84,12 @@ deploys new kernel from staging (if desired and available)
 updates environment settings (as a precautionary measure)
 .br
 (using \fBenv-update\fR)
+
+.IP \(bu 2
+updates the \fBeix\fR(1) package metadata (if desired)
+.br
+(using \fBeix-sync -0\fR)
+
 .IP \(bu 2
 runs any custom updaters in \fI/etc/genup/updaters.d\fR
 .PP
@@ -198,6 +204,11 @@ been downloaded by Portage, but which do not relate to the installed version of
 any package.
 This option inhibits such cleaning.
 .TP
+.BR \-m ", " \-\-no\-eix\-metadata\-update
+Do not perform an update of the \fBeix\fR metadata at the end-of-run (NB, specifying
+this may cause odd results to be reported when using the \fBeix\fR tool
+subsequently).
+.TP
 .BR \-n ", " \-\-no\-kernel\-upgrade
 Do not perform (in non-interactive mode) or offer to perform (in interactive
 mode) a kernel recompile, even should a newer version be available.
@@ -205,6 +216,10 @@ This option is implied if the \fBbuildkernel\fR USE flag is unset.
 
 Note, this does \fBnot\fR itself prevent the update of \fBgentoo-sources\fR (or similar
 package), during the @world \fBemerge\fR(1) step.
+.TP
+.BR \-N ", " \-\-no\-nocache
+Do not attempt to use  \fBnocache\fR(1) with \fBeix-sync\fR(1), even when
+the \fBnocache\fR USE flag is set.
 .TP
 .BR \-p ", " \-\-no\-perl\-cleaner
 Do not attempt to run \fBperl-cleaner\fR(1) during the process.
@@ -283,6 +298,12 @@ may always be suppressed by using the \fB--no-emtee\fR option. Note that even wh
 \fB@world\fR  \fBemerge\fR will always still be attempted immediately afterwards
 (nomally a relatively rapid no-op, this behaviour ensures all corner cases are
 resoved correctly).
+
+If the \fBnocache\fR USE flag is set when \fBgenup\fR is emerged
+(it is \fIun\fRset by default), then all repo sync steps will be prefixed
+by \fBnocache\fR, which can prevent overswapping etc. on limited
+memory systems. This behaviour may always be suppressed by using the
+\fB--no-nocache\fR option.
 .SH EXTENDING GENUP
 At the end of the main process, \fBgenup\fR will attempt to run any executable
 files found in the \fI/etc/genup/updaters.d\fR directory
@@ -329,6 +350,7 @@ sakaki \(em send bug reports or comments to <sakaki@deciban.com>
 .BR eix-sync (1),
 .BR emaint (1),
 .BR nice (1),
+.BR nocache (1),
 .BR make (1),
 .BR python (1),
 .BR perl-cleaner (1),

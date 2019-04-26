@@ -29,7 +29,7 @@ shopt -s nullglob
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.20"
+VERSION="1.0.21"
 ETCPROFILE="/etc/profile"
 UPDATERSDIR="/etc/${PROGNAME}/updaters.d"
 RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS="" ALERT_TEXT=""
@@ -62,6 +62,11 @@ PUMP=""
 NOPUMP="-distcc -distcc-pump"
 PORTAGEINFO=""
 PORTAGEFEATURES=""
+USE_NOCACHE=false
+NOCACHE=""
+if "${USE_NOCACHE}"; then
+    NOCACHE="nocache"
+fi
 # following should already be in the environment; but to be safe...
 if [[ ! -v NUMCPUS ]]; then
     export NUMCPUS=$(grep -E 'processor\s+:' /proc/cpuinfo | wc -l)
@@ -84,6 +89,7 @@ declare -i ARG_KEEP_OLD_DISTFILES=0
 declare -i ARG_NO_PERL_CLEANER=0
 declare -i ARG_NO_EIX_SYNC=0 ARG_ALERT=0
 declare -i ARG_IGNORE_REQUIRED_CHANGES=0 ARG_NO_CUSTOM_UPDATERS=0
+declare -i ARG_NO_EIX_METADATA_UPDATE=0 ARG_NO_NOCACHE=0
 declare -i ADJUSTMENT=19
 # force TERM if none found (e.g. when running from cron)
 # otherwise mach builds (firefox etc.) will fail
@@ -212,13 +218,13 @@ update_portage_tree_and_sync_eix() {
             # what you want when webrsync-gpg is in use
             show "Running emaint sync --auto to update overlays"
             show "(make sure you have auto-sync = no in gentoo.conf)..."
-            emaint sync --auto
+            ${NOCACHE} emaint sync --auto
         fi
         show "Updating Portage tree and syncing the eix cache"
         show "(this may take some time)..."
         # no longer explicitly set -q
         # (user can still do so via --eix-sync-args)
-        eix-sync ${EIXSYNCARGS}
+        ${NOCACHE} eix-sync ${EIXSYNCARGS}
     else
         warning "As requested, not performing eix-sync"
         if ((WEBRSYNC==1)); then
@@ -475,6 +481,17 @@ update_environment() {
     # /etc/ld.so.cache)
     env-update
 }
+update_eix_metadata() {
+    # ensure eix metadata is up-to-date (will not be if
+    # only non-gentoo repos have changed in this run)
+    if ((ARG_NO_EIX_METADATA_UPDATE==0)); then
+        # following does not hit the network
+        show "Updating eix metadata..."
+        eix-sync -0
+    else
+        warning "As requested, not updating eix metadata"
+    fi
+}
 remove_unreferenced_packages() {
     # following should be reasonably safe, it removes any packages that are not
     # required by the transitive closure of @world set dependencies
@@ -562,9 +579,14 @@ Options:
   -k, --keep-old-distfiles
                         don't purge source tarballs (distfiles) for uninstalled
                         versions of packages (or uninstalled packages)
+  -m, --no-eix-metadata-update
+                        don't attempt to update eix metadata at the
+                        completion of the run
   -n, --no-kernel-upgrade
                         do not attempt to run buildkernel (implied if
                         buildkernel USE flag has not been set)
+  -N, --no--nocache     do not attempt to use nocache with eix-sync, even
+                        when the nocache USE flag has been set
   -p, --no-perl-cleaner do not attempt to run perl-cleaner
   -r, --adjustment=N    add integer N to the build niceness -20<=N<=19
                         (the default is 19, running builds at lowest possible
@@ -642,7 +664,7 @@ process_command_line_options() {
     declare -i RC
     set +e
         # error trapping off, as we want to handle errors
-        TEMP="$(getopt -o aAb:cCde:Ehiknpr:SvVx: --long ask,alert,buildkernel-args:,dispatch-conf,no-custom-updaters,deploy-from-staging,emerge-args:,no-emtee,help,ignore-required-changes,keep-old-distfiles,no-kernel-upgrade,no-perl-cleaner,adjustment:,no-eix-sync,verbose,version,eix-sync-args: -n "${PROGNAME}" -- "${@}")"
+        TEMP="$(getopt -o aAb:cCde:EhikmnNpr:SvVx: --long ask,alert,buildkernel-args:,dispatch-conf,no-custom-updaters,deploy-from-staging,emerge-args:,no-emtee,help,ignore-required-changes,keep-old-distfiles,no-eix-metadata-update,no-kernel-upgrade,no-nocache,no-perl-cleaner,adjustment:,no-eix-sync,verbose,version,eix-sync-args: -n "${PROGNAME}" -- "${@}")"
         RC="${?}"
     set -e
     if ((RC!=0)); then
@@ -672,7 +694,9 @@ process_command_line_options() {
             -h|--help) ARG_HELP=1 ; shift ;;
             -i|--ignore-required-changes) ARG_IGNORE_REQUIRED_CHANGES=1 ; shift ;;
             -k|--keep-old-distfiles) ARG_KEEP_OLD_DISTFILES=1 ; shift ;;
+            -m|--no-eix-metadata-update) ARG_NO_EIX_METADATA_UPDATE=1 ; shift ;;
             -n|--no-kernel-upgrade) ARG_NO_KERNEL_UPGRADE=1 ; shift ;;
+            -N|--no-nocache) ARG_NO_NOCACHE=1 ; shift ;;
             -p|--no-perl-cleaner) ARG_NO_PERL_CLEANER=1 ; shift ;;
             -r|--adjustment)
                 case "${2}" in
@@ -722,6 +746,9 @@ process_command_line_options() {
     if ! "${USE_BUILDKERNEL}"; then
         ARG_NO_KERNEL_UPGRADE=1
     fi
+    if ((ARG_NO_NOCACHE==1)); then
+        NOCACHE=""
+    fi
     internal_consistency_option_checks
 }
 
@@ -751,6 +778,7 @@ rebuild_packages_depending_on_stale_libraries
 purge_old_distfiles_if_desired
 copy_new_kernel_from_staging_if_present_and_desired
 update_environment
+update_eix_metadata
 run_custom_updaters_if_present
 display_final_status
 cleanup_and_exit_with_code 0
