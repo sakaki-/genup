@@ -1,4 +1,4 @@
-.TH GENUP 8 "Version 1.0.21: April 2019"
+.TH GENUP 8 "Version 1.0.22: April 2019"
 .SH NAME
 genup \- update Portage tree, all installed packages, and kernel
 .SH SYNOPSIS
@@ -208,6 +208,9 @@ This option inhibits such cleaning.
 Do not perform an update of the \fBeix\fR metadata at the end-of-run (NB, specifying
 this may cause odd results to be reported when using the \fBeix\fR tool
 subsequently).
+.TP
+.BR \-M ", " \-\-no\-module\-rebuild
+Do not attempt to rebuild external modules by default.
 .TP
 .BR \-n ", " \-\-no\-kernel\-upgrade
 Do not perform (in non-interactive mode) or offer to perform (in interactive
