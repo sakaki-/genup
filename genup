@@ -67,19 +67,6 @@ NOCACHE=""
 if "${USE_NOCACHE}"; then
     NOCACHE="nocache"
 fi
-# following should already be in the environment; but to be safe...
-if [[ ! -v NUMCPUS ]]; then
-    export NUMCPUS=$(grep -E 'processor\s+:' /proc/cpuinfo | wc -l)
-fi
-if [[ ! -v NUMCPUSPLUSONE ]]; then
-    export NUMCPUSPLUSONE=$(( NUMCPUS + 1 ))
-fi
-if [[ ! -v MAKEOPTS ]]; then
-    export MAKEOPTS="${MAKEOPTS--j${NUMCPUSPLUSONE} -l${NUMCPUS}}"
-fi
-if [[ ! -v EMERGE_DEFAULT_OPTS ]]; then
-    export EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS---jobs=${NUMCPUSPLUSONE} --load-average=${NUMCPUS}}"
-fi
 declare -i KERNELBUILT=0 KERNELDEPLOYED=0 NEEDSDISPATCHCONF=0
 declare -i WEBRSYNC=0
 # program arguments (booleans in this case)
