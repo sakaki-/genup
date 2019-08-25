@@ -29,7 +29,7 @@ shopt -s nullglob
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.23"
+VERSION="1.0.24"
 ETCPROFILE="/etc/profile"
 UPDATERSDIR="/etc/${PROGNAME}/updaters.d"
 RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS="" ALERT_TEXT=""
@@ -232,7 +232,9 @@ remove_any_prior_emerge_resume_history() {
 }
 ensure_portage_itself_is_up_to_date() {
     show "Bringing Portage itself up to date..."
-    ${EMERGE} ${VERBOSITYFLAG} --oneshot --update sys-apps/portage
+    # don't fail on this, as an @world update may solve any blocks
+    ${EMERGE} ${VERBOSITYFLAG} --oneshot --update sys-apps/portage || \
+        warning "Could not update Portage: proceeding anyway"
 }
 
 ensure_genup_itself_is_up_to_date() {
