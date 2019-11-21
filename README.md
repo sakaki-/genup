@@ -20,7 +20,7 @@ Tool to update the **Portage**(5) tree, all installed packages, and kernel, unde
 * rebuilds any packages depending on stale libraries
 (using `emerge @preserved-rebuild`)
 * updates any old **perl(1)** modules
-(using `perl-cleaner --all`)
+(using `perl-cleaner --reallyall`)
 * resolves clashing config file changes (in interactive mode)
 (using `dispatch-conf`)
 * upgrades the kernel if possible (to staging, in _/boot_)
