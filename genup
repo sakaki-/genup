@@ -5,7 +5,7 @@
 # Will offer to update the kernel, if a new version has become available.
 # Intended to be run interactively.
 #
-# Copyright (c) 2014-2019 sakaki <sakaki@deciban.com>
+# Copyright (c) 2014-2020 sakaki <sakaki@deciban.com>
 #
 # License (GPL v3.0)
 # ------------------
@@ -29,7 +29,7 @@ shopt -s nullglob
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.24"
+VERSION="1.0.25"
 ETCPROFILE="/etc/profile"
 UPDATERSDIR="/etc/${PROGNAME}/updaters.d"
 RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS="" ALERT_TEXT=""
@@ -344,8 +344,22 @@ rebuild_packages_depending_on_stale_libraries() {
     # the below emerge will rebuild any such consumers, so that the old
     # library may be freed
     show "Rebuilding any consumers of old shared libraries, which did not autoupdate..."
+    # do this twice - first, with getbinpkg enabled (as this'll pick up anything
+    # already rebuilt on the binhost, if one is used, saving time) and then again with it
+    # disabled, in case there are any local packages which need rebuilding (and
+    # where we need to suppress getbinpkg, otherwise it'll just re-install from the
+    # local tbz2)
     if ! ${PUMP} ${EMERGE} ${VERBOSITYFLAG} @preserved-rebuild; then
         if MAKEOPTS="${MAKEOPTS-} -j1" FEATURES="${NOPUMP}" ${EMERGE} --resume; then
+            warning "emerge @preserved-rebuild completed successfully, but only by restricting"
+            warning "build parallelism and distcc"
+        else
+            warning "Failed to complete emerge @preserved-rebuild due to error"
+        fi
+    fi
+    show "Rebuilding again, with getbinpkg suppressed, to catch any local-only packages..."
+    if !  FEATURES="-getbinpkg" ${PUMP} ${EMERGE} ${VERBOSITYFLAG} @preserved-rebuild; then
+        if MAKEOPTS="${MAKEOPTS-} -j1" FEATURES="-getbinpkg ${NOPUMP}" ${EMERGE} --resume; then
             warning "emerge @preserved-rebuild completed successfully, but only by restricting"
             warning "build parallelism and distcc"
         else
@@ -484,7 +498,7 @@ update_eix_metadata() {
     if ((ARG_NO_EIX_METADATA_UPDATE==0)); then
         # following does not hit the network
         show "Updating eix metadata..."
-        eix-sync -0
+        eix-sync -0 |& sed -e '/^Processing/d'
     else
         warning "As requested, not updating eix metadata"
     fi
