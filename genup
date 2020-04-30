@@ -29,7 +29,7 @@ shopt -s nullglob
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.26"
+VERSION="1.0.27"
 ETCPROFILE="/etc/profile"
 UPDATERSDIR="/etc/${PROGNAME}/updaters.d"
 RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS="" ALERT_TEXT=""
@@ -60,6 +60,7 @@ BUILDKERNELARGS=""
 EIXSYNCARGS=""
 PUMP=""
 NOPUMP="-distcc -distcc-pump"
+FALLBACK_SENTINEL="/tmp/.full-emptytree-emerge-performed"
 PORTAGEINFO=""
 PORTAGEFEATURES=""
 USE_NOCACHE=false
@@ -260,7 +261,8 @@ try_emtee_update_if_enabled() {
         # emerge afterwards anyhow
         show "Attempting to update @world set (for new versions, or changed use flags)"
         show "using emtee..."
-        if ${PUMP} emtee ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} --emerge-args="${EMERGEARGS}"; then
+        rm -f "${FALLBACK_SENTINEL}"
+        if ${PUMP} emtee ${ASKFLAG} ${ALERTFLAG} ${VERBOSITYFLAG} --emerge-args="${EMERGEARGS}" --full-build-fallback-threshold=75; then
             show "emtee run completed successfully!"
         else
             warning "emtee @world build did not complete successfully!"
@@ -546,6 +548,14 @@ display_final_status() {
     if ((NEEDSDISPATCHCONF==1)); then
         warning "There are configuration file changes pending review!"
         warning "Please run dispatch-conf to interactively resolve them."
+        if "${USE_EMTEE}" && [[ -f "${FALLBACK_SENTINEL}" ]]; then
+            rm -f "${FALLBACK_SENTINEL}"
+            warning "  TAKE CARE: a full --emptytree @world emerge has been performed;"
+            warning "  you may need to retain your current version of many"
+            warning "  configuration files - when prompted by dispatch-conf - to"
+            warning "  retain full system functionality!"
+            warning "  (use the 'z' / 'zap new' option where unsure)"
+        fi
     else
         show "There are no configuration file changes pending review."
     fi
