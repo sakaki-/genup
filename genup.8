@@ -1,4 +1,4 @@
-.TH GENUP 8 "Version 1.0.27: April 2020"
+.TH GENUP 8 "Version 1.0.28: September 2020"
 .SH NAME
 genup \- update Portage tree, all installed packages, and kernel
 .SH SYNOPSIS
@@ -17,9 +17,13 @@ updates Portage tree & overlays; syncs \fBeix\fR(1)
 .br
 (using (if needed) \fBemaint sync --auto\fR, and \fBeix-sync\fR)
 .IP \(bu 2
-removes any prior \fBemerge\fR(1) resume history;
+removes any prior \fBemerge\fR(1) resume history
 .br
 (using \fBemaint --fix cleanresume\fR)
+.IP \(bu 2
+on aarch64, attempts to apply any pending fixups
+.br
+(if desired, by running \fI/etc/cron.weekly/fixup\fR; errors non-fatal)
 .IP \(bu 2
 ensures Portage itself is up-to-date
 .br
@@ -182,6 +186,10 @@ the \fB--ignore-required-changes\fR option.
 .BR \-E ", " \-\-no\-emtee
 Do not attempt to use the \fBemtee\fR(1) tool, even when the
 eponymous USE flag has been enabled.
+.TP
+.BR \-F ", " \-\-no\-fixups
+Do not attempt to run any custom fixups on aarch64, even if the file
+\fI/etc/cron.weekly/fixup\fR is present and executable.
 .TP
 .BR \-h ", " \-\-help
 Displays a short help screen, and exits.

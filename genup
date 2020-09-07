@@ -29,9 +29,10 @@ shopt -s nullglob
 
 # ********************** variables ********************* 
 PROGNAME="$(basename "${0}")"
-VERSION="1.0.27"
+VERSION="1.0.28"
 ETCPROFILE="/etc/profile"
 UPDATERSDIR="/etc/${PROGNAME}/updaters.d"
+FIXUPSCRIPT="/etc/cron.weekly/fixup"
 RED_TEXT="" GREEN_TEXT="" YELLOW_TEXT="" RESET_ATTS="" ALERT_TEXT=""
 if [[ -v TERM && -n "${TERM}" && "${TERM}" != "dumb" ]]; then
     RED_TEXT="$(tput setaf 1)$(tput bold)"
@@ -77,6 +78,7 @@ declare -i ARG_KEEP_OLD_DISTFILES=0
 declare -i ARG_NO_PERL_CLEANER=0
 declare -i ARG_NO_EIX_SYNC=0 ARG_ALERT=0
 declare -i ARG_IGNORE_REQUIRED_CHANGES=0 ARG_NO_CUSTOM_UPDATERS=0
+declare -i ARG_NO_FIXUPS=0
 declare -i ARG_NO_EIX_METADATA_UPDATE=0 ARG_NO_NOCACHE=0
 declare -i ARG_NO_MODULE_REBUILD=0
 declare -i ADJUSTMENT=19
@@ -402,6 +404,24 @@ run_custom_updaters_if_present() {
         fi
     fi
 }
+run_fixups_if_present() {
+    # if not inhibited, and running on aarch64, and the file
+    # /etc/cron.weekly/fixup is present and executable, run it: this
+    # will apply any pending hotfixes, which is generally
+    # good hygiene to do prior to performing an update (this is
+    # currently only really of application on RPi systems running
+    # the gentoo-on-rpi-64bit image)
+    # NB: we do not treat it as a fatal error if some or all of the
+    # fixup scripts fail to complete successfully
+    if ((ARG_NO_FIXUPS==0)) && [[ -x "${FIXUPSCRIPT}" && "aarch64" == "$(uname -m)" ]]; then
+        show "Running fixup scripts via '${FIXUPSCRIPT}'..."
+        if ! "${FIXUPSCRIPT}"; then
+            warning "Not all fixups ran successfully!"
+            warning "Continuing anyway; check the log file"
+            warning "'/var/log/latest-fixup-run.log' for further details."
+        fi
+    fi
+}   
 check_if_dispatch_conf_needs_to_be_run() {
     # check if the user has any configuration file changes pending review
     # by dispatch-conf, and set the NEEDSDISPATCHCONF variable accordingly
@@ -592,6 +612,10 @@ Options:
                         automatically make necessary changes to config files
   -E, --no-emtee        don't attempt to use the emtee tool, even when the
                         eponymous USE flag has been enabled
+  -F, --no-fixups
+                        do not attempt to run /etc/cron.weekly/fixup, even
+                        where this file is present and executable (fixups
+                        are only in use on aarch64 systems)
   -h, --help            show this help message and exit
   -i, --ignore-required-changes
                         don't exit with an error in the event that user-driven
@@ -687,7 +711,7 @@ process_command_line_options() {
     declare -i RC
     set +e
         # error trapping off, as we want to handle errors
-        TEMP="$(getopt -o aAb:cCde:EhikmMnNpr:SvVx: --long ask,alert,buildkernel-args:,dispatch-conf,no-custom-updaters,deploy-from-staging,emerge-args:,no-emtee,help,ignore-required-changes,keep-old-distfiles,no-eix-metadata-update,no-module-rebuild,no-kernel-upgrade,no-nocache,no-perl-cleaner,adjustment:,no-eix-sync,verbose,version,eix-sync-args: -n "${PROGNAME}" -- "${@}")"
+        TEMP="$(getopt -o aAb:cCde:EFhikmMnNpr:SvVx: --long ask,alert,buildkernel-args:,dispatch-conf,no-custom-updaters,deploy-from-staging,emerge-args:,no-emtee,no-fixups,help,ignore-required-changes,keep-old-distfiles,no-eix-metadata-update,no-module-rebuild,no-kernel-upgrade,no-nocache,no-perl-cleaner,adjustment:,no-eix-sync,verbose,version,eix-sync-args: -n "${PROGNAME}" -- "${@}")"
         RC="${?}"
     set -e
     if ((RC!=0)); then
@@ -714,6 +738,7 @@ process_command_line_options() {
                     *) EMERGEARGS="${2}" ; shift 2 ;;
                 esac ;;
             -E|--no-emtee) USE_EMTEE=false ; shift ;;
+            -F|--no-fixups) ARG_NO_FIXUPS=1 ; shift ;;
             -h|--help) ARG_HELP=1 ; shift ;;
             -i|--ignore-required-changes) ARG_IGNORE_REQUIRED_CHANGES=1 ; shift ;;
             -k|--keep-old-distfiles) ARG_KEEP_OLD_DISTFILES=1 ; shift ;;
@@ -786,6 +811,7 @@ display_greeting
 check_gcc_config_and_reset_if_necessary
 update_portage_tree_and_sync_eix
 remove_any_prior_emerge_resume_history
+run_fixups_if_present
 ensure_portage_itself_is_up_to_date
 ensure_genup_itself_is_up_to_date
 try_emtee_update_if_enabled

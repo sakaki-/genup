@@ -7,6 +7,8 @@ Tool to update the **Portage**(5) tree, all installed packages, and kernel, unde
 (using `emaint sync` / `eix-sync`)
 * removes any prior **emerge**(1) resume history
 (using `emaint --fix cleanresume`)
+* on `aarch64`, attempts to apply any pending fixups
+(if desired, by running `/etc/cron.weekly/fixup`; errors non-fatal)
 * ensures **Portage**(5) itself is up-to-date
 (using `emerge --oneshot --update portage`)
 * ensures **genup** itself is up-to-date (restarting if not)
