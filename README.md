@@ -1,6 +1,8 @@
 # genup
 Tool to update the **Portage**(5) tree, all installed packages, and kernel, under Gentoo Linux.
 
+> 31 Oct 2020: sadly, due to legal obligations arising from a recent change in my 'real world' job, I must announce I am **standing down as maintainer of this project with immediate effect**. For the meantime, I will leave the repo up (for historical interest, and it may be of use to others); however, I plan no further updates, nor will I be accepting / actioning further pull requests or bug reports from this point. Email requests for support will also have to be politely declined, so, **please treat this as an effective EOL notice**.<br><br>For further details, please see my post [here](https://forums.gentoo.org/viewtopic-p-8522963.html#8522963).<br><br>With sincere apologies, sakaki ><
+
 ## Description
 **genup** is  a  utility  intended  to  simplify the process of keeping your Gentoo system up to date.  When invoked, it automatically performs the following steps, in order:
 * updates Portage tree (and active overlays), and syncs **eix**(1)
